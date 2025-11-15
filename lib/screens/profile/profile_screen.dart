@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import '../services/auth_service.dart';
-import '../services/data_service.dart';
-import '../models/user_model.dart';
-import '../core/routes/app_routes.dart';
-import '../widgets/loading_widget.dart';
-import '../widgets/error_widget.dart';
+import '../../services/auth_service.dart';
+import '../../services/data_service.dart';
+import '../../services/user_preference_service.dart';
+import '../../models/user_model.dart';
+import '../../core/routes/app_routes.dart';
+import '../../widgets/loading_widget.dart';
+import '../../widgets/error_widget.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -17,9 +18,11 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final _authService = AuthService();
   final _dataService = DataService();
+  final _userPreferenceService = UserPreferenceService();
   UserModel? _userModel;
   bool _isLoading = true;
   String? _error;
+  ImageProvider? _cachedImageProvider;
 
   @override
   void initState() {
@@ -47,37 +50,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     try {
-      // Reload Firebase Auth user to get latest profile data (including photoURL)
-      await user.reload();
-      final refreshedUser = _authService.currentUser;
+      // Load user data from Supabase
+      final userModel = await _dataService.getUserData(user.id);
       
-      // Try to load from Supabase or Firestore (DataService handles fallback)
-      final userModel = await _dataService.getUserData(refreshedUser?.uid ?? user.uid);
-      
-      // Merge data: prioritize Firebase Auth photoURL (most up-to-date)
-      // but use database data for other fields
+      // Merge data: prioritize database data, fallback to Auth metadata
       if (userModel != null) {
+        // Pre-decode base64 image to avoid blocking main thread during build
+        _preloadImage(userModel.photoURL);
         setState(() {
-          _userModel = UserModel(
-            uid: userModel.uid,
-            email: userModel.email ?? refreshedUser?.email,
-            displayName: userModel.displayName ?? refreshedUser?.displayName,
-            // Prioritize Firebase Auth photoURL (updated immediately after upload)
-            photoURL: refreshedUser?.photoURL ?? userModel.photoURL,
-            phoneNumber: userModel.phoneNumber,
-            createdAt: userModel.createdAt,
-            updatedAt: userModel.updatedAt,
-          );
+          _userModel = userModel;
           _isLoading = false;
         });
       } else {
         // If no database data, use Auth data
+        final photoURL = user.userMetadata?['photo_url'] as String?;
+        _preloadImage(photoURL);
         setState(() {
           _userModel = UserModel(
-            uid: refreshedUser?.uid ?? user.uid,
-            email: refreshedUser?.email ?? user.email,
-            displayName: refreshedUser?.displayName ?? user.displayName,
-            photoURL: refreshedUser?.photoURL ?? user.photoURL,
+            uid: user.id,
+            email: user.email,
+            displayName: user.userMetadata?['display_name'] as String?,
+            photoURL: photoURL,
           );
           _isLoading = false;
         });
@@ -88,13 +81,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _isLoading = false;
         // Fallback to Auth data
         final currentUser = _authService.currentUser;
-        _userModel = UserModel(
-          uid: currentUser?.uid ?? user.uid,
-          email: currentUser?.email ?? user.email,
-          displayName: currentUser?.displayName ?? user.displayName,
-          photoURL: currentUser?.photoURL ?? user.photoURL,
-        );
+        if (currentUser != null) {
+          final photoURL = currentUser.userMetadata?['photo_url'] as String?;
+          _preloadImage(photoURL);
+          _userModel = UserModel(
+            uid: currentUser.id,
+            email: currentUser.email,
+            displayName: currentUser.userMetadata?['display_name'] as String?,
+            photoURL: photoURL,
+          );
+        }
       });
+    }
+  }
+
+  /// Pre-load image asynchronously to avoid blocking main thread
+  void _preloadImage(String? photoURL) {
+    if (photoURL == null || photoURL.isEmpty) {
+      _cachedImageProvider = null;
+      return;
+    }
+
+    // Decode base64 images in background to avoid blocking UI
+    if (photoURL.startsWith('data:image')) {
+      Future.microtask(() {
+        try {
+          final base64String = photoURL.split(',')[1];
+          final bytes = base64Decode(base64String);
+          if (mounted) {
+            setState(() {
+              _cachedImageProvider = MemoryImage(bytes);
+            });
+          }
+        } catch (e) {
+          print('Error preloading base64 image: $e');
+          if (mounted) {
+            setState(() {
+              _cachedImageProvider = null;
+            });
+          }
+        }
+      });
+    } else {
+      // Network images - use cache busting
+      _cachedImageProvider = NetworkImage(_getImageUrlWithCacheBust(photoURL));
     }
   }
 
@@ -133,10 +163,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     final displayUser = _userModel ?? UserModel(
-      uid: user.uid,
+      uid: user.id,
       email: user.email,
-      displayName: user.displayName,
-      photoURL: user.photoURL,
+      displayName: user.userMetadata?['display_name'] as String?,
+      photoURL: user.userMetadata?['photo_url'] as String?,
     );
 
     return Scaffold(
@@ -164,11 +194,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             },
             tooltip: 'Edit Profile',
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadUserData,
-            tooltip: 'Refresh',
-          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -179,19 +204,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             CircleAvatar(
               radius: 60,
               backgroundColor: Colors.blue,
-              backgroundImage: displayUser.photoURL != null
-                  ? (displayUser.photoURL!.startsWith('data:image')
-                      ? MemoryImage(
-                          // Decode base64 data URL asynchronously to avoid blocking
-                          base64Decode(
-                            displayUser.photoURL!.split(',')[1],
-                          ),
-                        ) as ImageProvider
-                      : NetworkImage(
-                          // Add cache busting to force reload of updated images
-                          _getImageUrlWithCacheBust(displayUser.photoURL!),
-                        ) as ImageProvider)
-                  : null,
+              backgroundImage: _cachedImageProvider ?? 
+                  (displayUser.photoURL != null && !displayUser.photoURL!.startsWith('data:image')
+                      ? NetworkImage(_getImageUrlWithCacheBust(displayUser.photoURL!))
+                      : null),
               onBackgroundImageError: displayUser.photoURL != null
                   ? (exception, stackTrace) {
                       // Handle error - will show initial letter
@@ -241,7 +257,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Note: Using Auth data. Firestore data may not be available.',
+                        'Note: Using Auth data. Supabase database data may not be available.',
                         style: TextStyle(
                           color: Colors.orange[900],
                           fontSize: 12,
@@ -295,6 +311,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ElevatedButton.icon(
               onPressed: () async {
                 try {
+                  // Clear all saved data (credentials + tokens) when signing out
+                  await _userPreferenceService.clearAllSavedData();
                   await _authService.signOut();
                   if (context.mounted) {
                     Navigator.of(context)

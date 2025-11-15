@@ -3,7 +3,7 @@ class AppConstants {
   static const String appName = 'Fitness App';
   static const String appVersion = '1.0.0';
   
-  // Firebase Collections
+  // Supabase Tables/Collections
   static const String usersCollection = 'users';
   static const String workoutsCollection = 'workouts';
   
@@ -17,6 +17,8 @@ class AppConstants {
   static const String loginError = 'Failed to login. Please try again.';
   static const String signupError = 'Failed to sign up. Please try again.';
 }
+
+
 
 
 

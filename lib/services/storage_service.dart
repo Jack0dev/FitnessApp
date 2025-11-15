@@ -93,10 +93,116 @@ class StorageService {
                  e.toString().contains('unauthorized')) {
         print('⚠️ Authentication failed!');
         print('   Note: Supabase Storage requires authentication.');
-        print('   Since we use Firebase Auth, you may need to set up RLS policies');
-        print('   that allow anonymous or public access, or use Supabase Auth.');
+        print('   Since we use Supabase Auth, you may need to set up RLS policies');
+        print('   that allow authenticated users to access storage buckets.');
       }
       
+      return null;
+    }
+  }
+
+  /// Upload video to Supabase Storage
+  /// Returns public URL if successful, null if failed
+  Future<String?> uploadVideo({
+    required File videoFile,
+    required String userId,
+    String folder = 'course_lessons',
+  }) async {
+    if (!SupabaseConfig.isConfigured || !_isSupabaseInitialized()) {
+      return null;
+    }
+
+    try {
+      final supabase = Supabase.instance.client;
+      final bucketName = SupabaseConfig.storageBucketName;
+      
+      // Generate unique filename
+      final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.mp4';
+      final filePath = '$folder/$fileName';
+
+      print('📤 Uploading video to Supabase Storage...');
+      print('   Bucket: $bucketName');
+      print('   Path: $filePath');
+
+      // Upload to Supabase Storage
+      await supabase.storage
+          .from(bucketName)
+          .upload(
+            filePath,
+            videoFile,
+            fileOptions: const FileOptions(
+              contentType: 'video/mp4',
+              upsert: true,
+            ),
+          );
+
+      // Get public URL
+      final publicUrl = supabase.storage
+          .from(bucketName)
+          .getPublicUrl(filePath);
+
+      print('✅ Video uploaded successfully!');
+      print('   URL: $publicUrl');
+      return publicUrl;
+    } catch (e, stackTrace) {
+      print('❌ Supabase Storage upload failed:');
+      print('   Error: $e');
+      print('   StackTrace: $stackTrace');
+      return null;
+    }
+  }
+
+  /// Upload lesson file (image or video) to Supabase Storage
+  /// Returns public URL if successful, null if failed
+  Future<String?> uploadLessonFile({
+    required File file,
+    required String userId,
+    required String courseId,
+    required bool isVideo,
+  }) async {
+    if (!SupabaseConfig.isConfigured || !_isSupabaseInitialized()) {
+      return null;
+    }
+
+    try {
+      final supabase = Supabase.instance.client;
+      final bucketName = SupabaseConfig.storageBucketName;
+      
+      // Generate unique filename
+      final extension = isVideo ? 'mp4' : 'jpg';
+      final fileName = '${courseId}_${userId}_${DateTime.now().millisecondsSinceEpoch}.$extension';
+      final folder = 'course_lessons';
+      final filePath = '$folder/$fileName';
+
+      print('📤 Uploading lesson file to Supabase Storage...');
+      print('   Bucket: $bucketName');
+      print('   Path: $filePath');
+      print('   Type: ${isVideo ? "video" : "image"}');
+
+      // Upload to Supabase Storage
+      await supabase.storage
+          .from(bucketName)
+          .upload(
+            filePath,
+            file,
+            fileOptions: FileOptions(
+              contentType: isVideo ? 'video/mp4' : 'image/jpeg',
+              upsert: true,
+            ),
+          );
+
+      // Get public URL
+      final publicUrl = supabase.storage
+          .from(bucketName)
+          .getPublicUrl(filePath);
+
+      print('✅ Lesson file uploaded successfully!');
+      print('   URL: $publicUrl');
+      return publicUrl;
+    } catch (e, stackTrace) {
+      print('❌ Supabase Storage upload failed:');
+      print('   Error: $e');
+      print('   StackTrace: $stackTrace');
       return null;
     }
   }

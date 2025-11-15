@@ -1,9 +1,12 @@
+import 'user_role.dart';
+
 class UserModel {
   final String uid;
   final String? email;
   final String? phoneNumber;
   final String? displayName;
   final String? photoURL;
+  final UserRole role;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -13,9 +16,10 @@ class UserModel {
     this.phoneNumber,
     this.displayName,
     this.photoURL,
+    UserRole? role,
     this.createdAt,
     this.updatedAt,
-  });
+  }) : role = role ?? UserRole.user;
 
   /// Create UserModel from Firestore document
   factory UserModel.fromFirestore(Map<String, dynamic> doc, String id) {
@@ -44,6 +48,7 @@ class UserModel {
       phoneNumber: doc['phoneNumber'] as String?,
       displayName: doc['displayName'] as String?,
       photoURL: doc['photoURL'] as String?,
+      role: UserRole.fromString(doc['role'] as String?),
       createdAt: parseTimestamp(doc['createdAt']),
       updatedAt: parseTimestamp(doc['updatedAt']),
     );
@@ -65,6 +70,7 @@ class UserModel {
       if (phoneNumber != null) 'phoneNumber': phoneNumber,
       if (displayName != null) 'displayName': displayName,
       if (photoURL != null) 'photoURL': photoURL,
+      'role': role.value,
       if (createdAt != null) 'createdAt': createdAt,
       'updatedAt': DateTime.now(),
     };
@@ -77,6 +83,7 @@ class UserModel {
     String? phoneNumber,
     String? displayName,
     String? photoURL,
+    UserRole? role,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -86,6 +93,7 @@ class UserModel {
       phoneNumber: phoneNumber ?? this.phoneNumber,
       displayName: displayName ?? this.displayName,
       photoURL: photoURL ?? this.photoURL,
+      role: role ?? this.role,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

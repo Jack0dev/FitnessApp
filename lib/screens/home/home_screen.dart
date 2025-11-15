@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import '../services/auth_service.dart';
-import '../services/data_service.dart';
-import '../models/user_model.dart';
-import '../core/routes/app_routes.dart';
-import '../widgets/loading_widget.dart';
+import '../../services/auth_service.dart';
+import '../../services/data_service.dart';
+import '../../services/user_preference_service.dart';
+import '../../services/role_service.dart';
+import '../../models/user_model.dart';
+import '../../core/routes/app_routes.dart';
+import '../../widgets/loading_widget.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,6 +17,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _authService = AuthService();
   final _dataService = DataService();
+  final _userPreferenceService = UserPreferenceService();
   UserModel? _userModel;
   bool _isLoading = true;
 
@@ -34,37 +37,50 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     try {
-      // Try to load from Supabase or Firestore (DataService handles fallback)
-      final userModel = await _dataService.getUserData(user.uid);
+      // Try to load from Supabase database
+      final userModel = await _dataService.getUserData(user.id);
       
       if (userModel != null) {
         setState(() {
           _userModel = userModel;
           _isLoading = false;
         });
+        // Redirect to appropriate dashboard based on role
+        if (mounted) {
+          final route = RoleService.getDashboardRoute(userModel);
+          Navigator.of(context).pushReplacementNamed(route);
+        }
       } else {
-        // If no database data, use Auth data
+        // If no database data, use Auth data (default to user role)
         setState(() {
           _userModel = UserModel(
-            uid: user.uid,
+            uid: user.id,
             email: user.email,
-            displayName: user.displayName,
-            photoURL: user.photoURL,
+            displayName: user.userMetadata?['display_name'] as String?,
+            photoURL: user.userMetadata?['photo_url'] as String?,
           );
           _isLoading = false;
         });
+        // Redirect to user dashboard
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed(AppRoutes.userDashboard);
+        }
       }
     } catch (e) {
       // Fallback to Auth data
       setState(() {
-        _userModel = UserModel(
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-        );
+          _userModel = UserModel(
+            uid: user.id,
+            email: user.email,
+            displayName: user.userMetadata?['display_name'] as String?,
+            photoURL: user.userMetadata?['photo_url'] as String?,
+          );
         _isLoading = false;
       });
+      // Redirect to user dashboard
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed(AppRoutes.userDashboard);
+      }
     }
   }
 
@@ -106,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 16),
                   if (user != null && _userModel != null) ...[
                     Text(
-                      'Hello, ${_userModel!.displayName ?? user.displayName ?? "User"}!',
+                      'Hello, ${_userModel!.displayName ?? user.userMetadata?['display_name'] ?? "User"}!',
                       style: TextStyle(
                         fontSize: 18,
                         color: Colors.grey[700],
@@ -160,6 +176,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   ElevatedButton(
                     onPressed: () async {
                       try {
+                        // Clear all saved data (credentials + tokens) when signing out
+                        await _userPreferenceService.clearAllSavedData();
                         await _authService.signOut();
                         if (context.mounted) {
                           Navigator.of(context)

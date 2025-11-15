@@ -1,128 +1,51 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../services/auth_service.dart';
-import '../services/data_service.dart';
-import '../services/local_auth_service.dart';
-import '../services/user_preference_service.dart';
-import '../core/routes/app_routes.dart';
-import '../utils/validators.dart';
-import '../core/constants/test_phone_numbers.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/auth_service.dart';
+import '../../services/data_service.dart';
+import '../../services/role_service.dart';
+import '../../core/routes/app_routes.dart';
+import '../../utils/validators.dart';
+import '../../core/constants/test_phone_numbers.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen>
+class _RegisterScreenState extends State<RegisterScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final _formKey = GlobalKey<FormState>();
+  final _emailFormKey = GlobalKey<FormState>();
+  final _phoneFormKey = GlobalKey<FormState>();
 
   // Email/Password fields
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  final _nameController = TextEditingController();
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   // Phone fields
   final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
   bool _isOtpSent = false;
-  String? _verificationId;
+  // Removed _verificationId - Supabase doesn't need it
   int _resendTimer = 0;
 
   final _authService = AuthService();
   final _dataService = DataService();
-  final _localAuthService = LocalAuthService();
-  final _userPreferenceService = UserPreferenceService();
   bool _isLoading = false;
-  bool _showFingerprintButton = false;
-  String? _savedEmail;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _phoneController.addListener(_formatPhoneNumber);
-    _checkFingerprintAvailability();
-  }
-
-  Future<void> _checkFingerprintAvailability() async {
-    final isEnabled = await _localAuthService.isFingerprintEnabled();
-    final isSupported = await _localAuthService.isDeviceSupported();
-    final hasBiometrics = await _localAuthService.hasEnrolledBiometrics();
-    final savedEmail = await _userPreferenceService.getLastLoggedInEmail();
-
-    if (mounted) {
-      setState(() {
-        _showFingerprintButton = isEnabled && isSupported && hasBiometrics && savedEmail != null;
-        _savedEmail = savedEmail;
-        if (_savedEmail != null) {
-          _emailController.text = _savedEmail!;
-        }
-      });
-    }
-  }
-
-  Future<void> _handleFingerprintLogin() async {
-    if (_savedEmail == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No saved email found. Please login manually first.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final authenticated = await _localAuthService.authenticate(
-        reason: 'Authenticate to login quickly',
-      );
-
-      if (authenticated) {
-        // Auto-fill email
-        _emailController.text = _savedEmail!;
-        // Show message that user still needs to enter password
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Fingerprint verified! Please enter your password.'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Fingerprint authentication failed'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
   }
 
   @override
@@ -130,6 +53,8 @@ class _LoginScreenState extends State<LoginScreen>
     _tabController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    _nameController.dispose();
     _phoneController.dispose();
     _otpController.dispose();
     super.dispose();
@@ -159,8 +84,15 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  Future<void> _handleEmailLogin() async {
-    if (!_formKey.currentState!.validate()) {
+  Future<void> _handleEmailRegister() async {
+    if (!_emailFormKey.currentState!.validate()) {
+      return;
+    }
+
+    if (_passwordController.text != _confirmPasswordController.text) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Passwords do not match')),
+      );
       return;
     }
 
@@ -169,17 +101,62 @@ class _LoginScreenState extends State<LoginScreen>
     });
 
     try {
-      final email = _emailController.text.trim();
-      await _authService.signInWithEmailAndPassword(
-        email: email,
+      final response = await _authService.registerWithEmailAndPassword(
+        email: _emailController.text.trim(),
         password: _passwordController.text,
+        displayName: _nameController.text.trim(),
       );
 
-      // Save email for fingerprint login
-      await _userPreferenceService.saveLastLoggedInEmail(email);
+      final user = response.user;
+      if (user != null) {
+        // Đợi một chút để đảm bảo auth state đã được update
+        await Future.delayed(const Duration(milliseconds: 300));
+        
+        // Verify user đã được authenticate
+        final currentUser = _authService.currentUser;
+        if (currentUser?.id != user.id) {
+          // Nếu user chưa được authenticate, thử lại sau 1 giây
+          await Future.delayed(const Duration(seconds: 1));
+          final retryUser = _authService.currentUser;
+          if (retryUser?.id != user.id) {
+            throw 'Authentication failed. Please try logging in.';
+          }
+        }
+        
+        // Save user data to database
+        final dataSuccess = await _dataService.saveUserData(
+          userId: user.id,
+          userData: {
+            'email': _emailController.text.trim(),
+            'displayName': _nameController.text.trim(),
+            'role': 'user', // Default role for new users
+            'createdAt': DateTime.now(),
+            'updatedAt': DateTime.now(),
+          },
+        );
 
-      if (mounted) {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+        // Update profile with display name
+        if (_nameController.text.trim().isNotEmpty) {
+          await _authService.updateProfile(
+            displayName: _nameController.text.trim(),
+          );
+        }
+
+        if (mounted) {
+          if (!dataSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Account created successfully! Note: Database might not be configured. Please check Supabase setup.',
+                ),
+                duration: Duration(seconds: 4),
+              ),
+            );
+          }
+          Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+        }
+      } else {
+        throw 'Registration failed. User was not created.';
       }
     } catch (e) {
       if (mounted) {
@@ -201,36 +178,163 @@ class _LoginScreenState extends State<LoginScreen>
       _isLoading = true;
     });
 
+    StreamSubscription<AuthState>? subscription;
+
     try {
-      final userCredential = await _authService.signInWithGoogle();
+      // Initiate Google OAuth flow
+      await _authService.signInWithGoogle();
 
-      if (userCredential?.user != null) {
-        final isNewUser = userCredential!.additionalUserInfo?.isNewUser ?? false;
+      // Listen to auth state changes to detect when OAuth callback completes
+      subscription = _authService.authStateChanges.listen(
+        (AuthState state) async {
+          if (state.event == AuthChangeEvent.signedIn && state.session != null) {
+            final user = state.session!.user;
+            
+            if (mounted) {
+              // Check if this is a new user (no data in database)
+              final userModel = await _dataService.getUserData(user.id);
+              final isNewUser = userModel == null;
 
-        if (isNewUser) {
-          // Save user data to Firestore for new Google users
-          await _dataService.saveUserData(
-            userId: userCredential.user!.uid,
-            userData: {
-              'email': userCredential.user!.email,
-              'displayName': userCredential.user!.displayName,
-              'photoURL': userCredential.user!.photoURL,
-              'provider': 'google',
-              'createdAt': DateTime.now(),
-              'updatedAt': DateTime.now(),
-            },
-          );
+              if (isNewUser) {
+                // Save user data to Supabase for new Google users
+                final dataSuccess = await _dataService.saveUserData(
+                  userId: user.id,
+                  userData: {
+                    'email': user.email,
+                    'displayName': user.userMetadata?['display_name'] as String?,
+                    'photoURL': user.userMetadata?['photo_url'] as String?,
+                    'provider': 'google',
+                    'role': 'user', // Default role for new Google users
+                    'createdAt': DateTime.now(),
+                    'updatedAt': DateTime.now(),
+                  },
+                );
+
+                if (mounted && !dataSuccess) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Account created successfully! Note: Database might not be configured.'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              }
+
+              subscription?.cancel();
+              // Get user data to determine role and redirect
+              final updatedUserModel = await _dataService.getUserData(user.id);
+              final route = updatedUserModel != null 
+                  ? RoleService.getDashboardRoute(updatedUserModel)
+                  : AppRoutes.userDashboard;
+              
+              if (mounted) {
+                setState(() {
+                  _isLoading = false;
+                });
+                Navigator.of(context).pushReplacementNamed(route);
+              }
+            }
+          }
+        },
+        onError: (error) {
+          subscription?.cancel();
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Google sign in failed: $error'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        },
+      );
+
+      // Periodically check if user has been authenticated
+      // This handles cases where deep link callback doesn't trigger authStateChanges
+      Timer? checkTimer;
+      checkTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+        if (!mounted || !_isLoading) {
+          timer.cancel();
+          return;
         }
+        
+        final user = _authService.currentUser;
+        if (user != null) {
+          // User has been authenticated
+          subscription?.cancel();
+          timer.cancel();
+          
+          if (mounted) {
+            try {
+              // Check if this is a new user
+              final userModel = await _dataService.getUserData(user.id);
+              final isNewUser = userModel == null;
 
-        if (mounted) {
-          Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+              if (isNewUser) {
+                // Save user data for new Google users
+                final dataSuccess = await _dataService.saveUserData(
+                  userId: user.id,
+                  userData: {
+                    'email': user.email,
+                    'displayName': user.userMetadata?['display_name'] as String?,
+                    'photoURL': user.userMetadata?['photo_url'] as String?,
+                    'provider': 'google',
+                    'role': 'user',
+                    'createdAt': DateTime.now(),
+                    'updatedAt': DateTime.now(),
+                  },
+                );
+
+                if (mounted && !dataSuccess) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Account created successfully! Note: Database might not be configured.'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              }
+
+              // Get user data to determine role and redirect
+              final updatedUserModel = await _dataService.getUserData(user.id);
+              final route = updatedUserModel != null 
+                  ? RoleService.getDashboardRoute(updatedUserModel)
+                  : AppRoutes.userDashboard;
+              
+              setState(() {
+                _isLoading = false;
+              });
+              Navigator.of(context).pushReplacementNamed(route);
+            } catch (e) {
+              setState(() {
+                _isLoading = false;
+              });
+            }
+          }
         }
-      }
+      });
+
+      // Set a timeout in case OAuth callback doesn't complete
+      Future.delayed(const Duration(seconds: 60), () {
+        checkTimer?.cancel();
+        if (mounted && _isLoading) {
+          subscription?.cancel();
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      });
     } catch (e) {
       if (mounted) {
         String errorMessage = e.toString();
-        if (errorMessage.contains('cancelled')) {
+        if (errorMessage.contains('cancelled') || errorMessage.contains('canceled')) {
           // User cancelled, don't show error
+          setState(() {
+            _isLoading = false;
+          });
           return;
         }
         ScaffoldMessenger.of(context).showSnackBar(
@@ -239,9 +343,6 @@ class _LoginScreenState extends State<LoginScreen>
             backgroundColor: Colors.red,
           ),
         );
-      }
-    } finally {
-      if (mounted) {
         setState(() {
           _isLoading = false;
         });
@@ -250,7 +351,7 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _sendOTP() async {
-    if (!_formKey.currentState!.validate()) {
+    if (!_phoneFormKey.currentState!.validate()) {
       return;
     }
 
@@ -261,58 +362,57 @@ class _LoginScreenState extends State<LoginScreen>
     final phoneNumber = Validators.formatPhoneNumber(_phoneController.text);
     final isTestNumber = TestPhoneNumbers.isTestNumber(phoneNumber);
 
-    await _authService.verifyPhoneNumber(
-      phoneNumber: phoneNumber,
-      onCodeSent: (String verificationId) {
-        setState(() {
-          _verificationId = verificationId;
-          _isOtpSent = true;
-          _isLoading = false;
-          _resendTimer = 60;
-          
-          // Auto-fill OTP code for test numbers
-          if (isTestNumber) {
-            _otpController.text = TestPhoneNumbers.defaultTestCode;
-          }
-        });
-        _startResendTimer();
+    try {
+      await _authService.signInWithPhoneNumber(
+        phoneNumber: phoneNumber,
+      );
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                isTestNumber 
-                    ? 'Using Firebase test number. Code: ${TestPhoneNumbers.defaultTestCode}'
-                    : 'Verification code sent to your phone',
-              ),
-              backgroundColor: isTestNumber ? Colors.blue : Colors.green,
-              duration: Duration(seconds: isTestNumber ? 5 : 3),
-            ),
-          );
+      setState(() {
+        _isOtpSent = true;
+        _isLoading = false;
+        _resendTimer = 60;
+        
+        // Auto-fill OTP code for test numbers
+        if (isTestNumber) {
+          _otpController.text = TestPhoneNumbers.defaultTestCode;
         }
-      },
-      onError: (String error) {
-        setState(() {
-          _isLoading = false;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(error),
-              backgroundColor: Colors.red,
+      });
+      _startResendTimer();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isTestNumber 
+                  ? 'Using test number. Code: ${TestPhoneNumbers.defaultTestCode}'
+                  : 'Verification code sent to your phone',
             ),
-          );
-        }
-      },
-    );
+            backgroundColor: isTestNumber ? Colors.blue : Colors.green,
+            duration: Duration(seconds: isTestNumber ? 5 : 3),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _verifyOTP() async {
-    if (!_formKey.currentState!.validate()) {
+    if (!_phoneFormKey.currentState!.validate()) {
       return;
     }
 
-    if (_verificationId == null) {
+    if (!_isOtpSent) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please request a verification code first'),
@@ -327,27 +427,55 @@ class _LoginScreenState extends State<LoginScreen>
     });
 
     try {
-      final userCredential = await _authService.signInWithPhoneNumber(
-        verificationId: _verificationId!,
-        smsCode: _otpController.text,
+      final response = await _authService.verifyPhoneOTP(
+        phoneNumber: _phoneController.text,
+        token: _otpController.text,
       );
 
-      if (userCredential?.user != null) {
-        final isNewUser = userCredential!.additionalUserInfo?.isNewUser ?? false;
+      final user = response.user;
+      if (user != null) {
+        // Check if this is a new user (no data in database)
+        final userModel = await _dataService.getUserData(user.id);
+        final isNewUser = userModel == null;
 
         if (isNewUser) {
-          await _dataService.saveUserData(
-            userId: userCredential.user!.uid,
+          // Save user data for new phone users
+          final dataSuccess = await _dataService.saveUserData(
+            userId: user.id,
             userData: {
               'phoneNumber': _phoneController.text,
+              'provider': 'phone',
+              'role': 'user',
               'createdAt': DateTime.now(),
               'updatedAt': DateTime.now(),
             },
           );
+
+          if (mounted && !dataSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Account created successfully! Note: Database might not be configured.'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        } else {
+          // Update phone number if changed
+          await _dataService.updateUserData(
+            userId: user.id,
+            updateData: {
+              'phoneNumber': _phoneController.text,
+            },
+          );
         }
 
+        // Get user data to determine role and redirect
         if (mounted) {
-          Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+          final updatedUserModel = await _dataService.getUserData(user.id);
+          final route = updatedUserModel != null 
+              ? RoleService.getDashboardRoute(updatedUserModel)
+              : AppRoutes.userDashboard;
+          Navigator.of(context).pushReplacementNamed(route);
         }
       }
     } catch (e) {
@@ -361,12 +489,12 @@ class _LoginScreenState extends State<LoginScreen>
           if (isTestNum) {
             errorMessage = 'Invalid verification code.\n\n'
                 'For test numbers, use code: 123456\n'
-                'Or check your Firebase Console for custom test number codes.';
+                'Or check your Supabase Dashboard for custom test number codes.';
           } else {
             errorMessage = 'Invalid verification code.\n\n'
                 'Please check:\n'
                 '1. SMS message for the correct code\n'
-                '2. Firebase Console > Authentication > Users\n'
+                '2. Supabase Dashboard > Authentication > Users\n'
                 '3. Ensure you\'re using the latest code sent.';
           }
         }
@@ -405,7 +533,7 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Login'),
+        title: const Text('Register'),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -423,23 +551,23 @@ class _LoginScreenState extends State<LoginScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          // Email Login Tab
+          // Email Register Tab
           SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Form(
-              key: _formKey,
+              key: _emailFormKey,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: 40),
                   const Icon(
-                    Icons.email,
+                    Icons.person_add,
                     size: 80,
                     color: Colors.blue,
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    'Welcome Back',
+                    'Create Account',
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -448,7 +576,7 @@ class _LoginScreenState extends State<LoginScreen>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Sign in with Email',
+                    'Sign up with Email',
                     style: TextStyle(
                       fontSize: 16,
                       color: Colors.grey[600],
@@ -456,6 +584,15 @@ class _LoginScreenState extends State<LoginScreen>
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 48),
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Full Name',
+                      prefixIcon: Icon(Icons.person),
+                    ),
+                    validator: Validators.validateName,
+                  ),
+                  const SizedBox(height: 16),
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -487,28 +624,46 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                     validator: Validators.validatePassword,
                   ),
-                  const SizedBox(height: 24),
-                  // Fingerprint Login Button (if available)
-                  if (_showFingerprintButton) ...[
-                    OutlinedButton.icon(
-                      onPressed: _isLoading ? null : _handleFingerprintLogin,
-                      icon: const Icon(Icons.fingerprint),
-                      label: const Text('Login with Fingerprint'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _confirmPasswordController,
+                    obscureText: _obscureConfirmPassword,
+                    decoration: InputDecoration(
+                      labelText: 'Confirm Password',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureConfirmPassword
+                              ? Icons.visibility
+                              : Icons.visibility_off,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscureConfirmPassword = !_obscureConfirmPassword;
+                          });
+                        },
                       ),
                     ),
-                    const SizedBox(height: 16),
-                  ],
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please confirm your password';
+                      }
+                      if (value != _passwordController.text) {
+                        return 'Passwords do not match';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
                   ElevatedButton(
-                    onPressed: _isLoading ? null : _handleEmailLogin,
+                    onPressed: _isLoading ? null : _handleEmailRegister,
                     child: _isLoading
                         ? const SizedBox(
                             height: 20,
                             width: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('Login'),
+                        : const Text('Register'),
                   ),
                   const SizedBox(height: 16),
                   // Divider with "OR"
@@ -541,20 +696,20 @@ class _LoginScreenState extends State<LoginScreen>
                   const SizedBox(height: 16),
                   TextButton(
                     onPressed: () {
-                      Navigator.of(context).pushNamed(AppRoutes.register);
+                      Navigator.of(context).pop();
                     },
-                    child: const Text('Don\'t have an account? Sign up'),
+                    child: const Text('Already have an account? Sign in'),
                   ),
                 ],
               ),
             ),
           ),
 
-          // Phone Login Tab
+          // Phone Register Tab
           SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Form(
-              key: _formKey,
+              key: _phoneFormKey,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -566,7 +721,7 @@ class _LoginScreenState extends State<LoginScreen>
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    'Login with Phone',
+                    'Create Account',
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -577,7 +732,7 @@ class _LoginScreenState extends State<LoginScreen>
                   Text(
                     _isOtpSent
                         ? 'Enter the verification code sent to your phone'
-                        : 'Enter your phone number to receive a verification code',
+                        : 'Sign up with Phone Number',
                     style: TextStyle(
                       fontSize: 16,
                       color: Colors.grey[600],
@@ -588,21 +743,21 @@ class _LoginScreenState extends State<LoginScreen>
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
+                      color: Colors.blue.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.green.withOpacity(0.3)),
+                      border: Border.all(color: Colors.blue.withOpacity(0.3)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.info_outline, color: Colors.green[700], size: 16),
+                        Icon(Icons.info_outline, color: Colors.blue[700], size: 16),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'New user? Just enter your phone number - account will be created automatically!',
+                            'Account will be created automatically when you verify your phone number',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.green[900],
+                              color: Colors.blue[900],
                               fontWeight: FontWeight.w500,
                             ),
                             textAlign: TextAlign.center,
@@ -640,7 +795,7 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Firebase test numbers work without billing.\nVerification code: ${TestPhoneNumbers.defaultTestCode}\n\nNote: If you added custom test numbers in Firebase Console, use the codes you configured there.',
+                            'Supabase test numbers work without billing.\nVerification code: ${TestPhoneNumbers.defaultTestCode}\n\nNote: If you added custom test numbers in Supabase Dashboard, use the codes you configured there.',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.blue[800],
@@ -775,7 +930,7 @@ class _LoginScreenState extends State<LoginScreen>
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Using Firebase test number.\nVerification code: 123456\n\nIf SMS auto-retrieval timed out, enter code manually.',
+                                'Using Supabase test number.\nVerification code: 123456\n\nIf SMS auto-retrieval timed out, enter code manually.',
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: Colors.blue[900],
@@ -799,7 +954,7 @@ class _LoginScreenState extends State<LoginScreen>
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'If SMS auto-retrieval timed out, check:\n1. Your SMS messages for the verification code\n2. Firebase Console > Authentication > Users for the code\n3. Enter the code manually in the field above',
+                                'If SMS auto-retrieval timed out, check:\n1. Your SMS messages for the verification code\n2. Supabase Dashboard > Authentication > Users for the code\n3. Enter the code manually in the field above',
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: Colors.orange[900],
@@ -818,7 +973,7 @@ class _LoginScreenState extends State<LoginScreen>
                               width: 20,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('Verify Code'),
+                          : const Text('Verify & Register'),
                     ),
                     const SizedBox(height: 16),
                     Row(
@@ -848,7 +1003,6 @@ class _LoginScreenState extends State<LoginScreen>
                       onPressed: () {
                         setState(() {
                           _isOtpSent = false;
-                          _verificationId = null;
                           _otpController.clear();
                           _resendTimer = 0;
                         });
@@ -887,9 +1041,9 @@ class _LoginScreenState extends State<LoginScreen>
                   const SizedBox(height: 16),
                   TextButton(
                     onPressed: () {
-                      Navigator.of(context).pushNamed(AppRoutes.register);
+                      Navigator.of(context).pop();
                     },
-                    child: const Text('Want to register with email instead?'),
+                    child: const Text('Already have an account? Sign in'),
                   ),
                 ],
               ),

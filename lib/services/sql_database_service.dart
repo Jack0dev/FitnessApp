@@ -1,9 +1,10 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
+import '../models/user_role.dart';
 
 /// SQL Database Service using Supabase (PostgreSQL)
 /// This service handles all SQL database operations
-/// Firebase Auth is still used for authentication
+/// Uses Supabase Auth for authentication
 class SqlDatabaseService {
   /// Check if Supabase is initialized safely
   /// Returns true only if Supabase instance exists and is initialized
@@ -45,11 +46,11 @@ class SqlDatabaseService {
     return Supabase.instance.client;
   }
 
-  /// Get current user ID from Firebase Auth
-  /// This is a helper to get the Firebase UID for SQL queries
+  /// Get current user ID from Supabase Auth
+  /// This is a helper to get the Supabase user ID for SQL queries
   String? getCurrentUserId() {
-    // Note: This should be called from context where Firebase Auth is available
-    // The actual user ID will be passed from Firebase Auth
+    // Note: This should be called from context where Supabase Auth is available
+    // The actual user ID will be passed from Supabase Auth
     return null; // Will be provided by caller
   }
 
@@ -60,6 +61,10 @@ class SqlDatabaseService {
   }) async {
     try {
       // Insert or update user in 'users' table
+      final role = userData['role'] is UserRole 
+          ? (userData['role'] as UserRole).value 
+          : (userData['role'] as String?) ?? 'user';
+      
       final response = await _supabase
           .from('users')
           .upsert({
@@ -69,6 +74,7 @@ class SqlDatabaseService {
             'photo_url': userData['photoURL'],
             'phone_number': userData['phoneNumber'],
             'provider': userData['provider'] ?? 'email',
+            'role': role,
             'created_at': userData['createdAt']?.toIso8601String() ?? DateTime.now().toIso8601String(),
             'updated_at': DateTime.now().toIso8601String(),
           })
@@ -96,6 +102,7 @@ class SqlDatabaseService {
         displayName: response['display_name'] as String?,
         photoURL: response['photo_url'] as String?,
         phoneNumber: response['phone_number'] as String?,
+        role: UserRole.fromString(response['role'] as String?),
         createdAt: response['created_at'] != null
             ? DateTime.parse(response['created_at'] as String)
             : null,

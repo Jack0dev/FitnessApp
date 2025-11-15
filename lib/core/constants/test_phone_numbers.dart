@@ -1,9 +1,9 @@
-/// Firebase Test Phone Numbers for Development
+/// Supabase Test Phone Numbers for Development
 /// These numbers work without billing and don't charge SMS fees
 /// Verification code is always: 123456
 class TestPhoneNumbers {
-  /// All Firebase test phone numbers with their codes
-  /// These are provided by Firebase for testing
+  /// All Supabase test phone numbers with their codes
+  /// These are provided by Supabase for testing
   static const List<Map<String, String>> testNumbers = [
     {
       'number': '+16505553434',
@@ -44,7 +44,7 @@ class TestPhoneNumbers {
     return testNumbers.map((test) => test['number']!).toList();
   }
 
-  /// Check if a phone number is a Firebase test number
+  /// Check if a phone number is a Supabase test number
   static bool isTestNumber(String phoneNumber) {
     final cleaned = phoneNumber.replaceAll(RegExp(r'[\s-]'), '');
     return testNumbers.any((test) {
@@ -63,6 +63,8 @@ class TestPhoneNumbers {
     return null;
   }
 }
+
+
 
 
 

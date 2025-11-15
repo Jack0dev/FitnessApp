@@ -1,14 +1,12 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
-import 'firestore_service.dart';
+import '../models/user_role.dart';
 import 'sql_database_service.dart';
 import '../config/supabase_config.dart';
 
-/// Abstract Data Service
-/// Supports both Firestore and Supabase
-/// Uses Supabase if configured, otherwise falls back to Firestore
+/// Data Service using Supabase PostgreSQL only
+/// Firebase/Firestore dependencies removed
 class DataService {
-  final FirestoreService _firestoreService = FirestoreService();
   SqlDatabaseService? _sqlService;
 
   /// Check if Supabase is initialized safely
@@ -35,97 +33,90 @@ class DataService {
     }
   }
 
-  /// Get user data - tries Supabase first, falls back to Firestore
+  /// Get user data from Supabase
   Future<UserModel?> getUserData(String userId) async {
-    // Try Supabase first if configured
-    if (_sqlService != null) {
-      try {
-        final userModel = await _sqlService!.getUserData(userId);
-        if (userModel != null) {
-          return userModel;
-        }
-      } catch (e) {
-        // If Supabase fails, fallback to Firestore
-        print('Supabase getUserData failed, using Firestore: $e');
-      }
+    if (_sqlService == null) {
+      throw Exception('Supabase not initialized. DataService requires Supabase.');
     }
 
-    // Fallback to Firestore
     try {
-      final doc = await _firestoreService.getUserDocument(userId);
-      if (doc != null && doc.exists) {
-        final data = doc.data() as Map<String, dynamic>;
-        return UserModel.fromFirestore(data, userId);
-      }
+      return await _sqlService!.getUserData(userId);
     } catch (e) {
-      print('Firestore getUserData failed: $e');
+      print('Failed to get user data: $e');
+      return null;
     }
-
-    return null;
   }
 
-  /// Save user data - tries Supabase first, falls back to Firestore
+  /// Save user data to Supabase
   Future<bool> saveUserData({
     required String userId,
     required Map<String, dynamic> userData,
   }) async {
-    // Try Supabase first if configured
-    if (_sqlService != null) {
-      try {
-        final success = await _sqlService!.saveUserData(
-          userId: userId,
-          userData: userData,
-        );
-        if (success) {
-          return true;
-        }
-      } catch (e) {
-        // If Supabase fails, fallback to Firestore
-        print('Supabase saveUserData failed, using Firestore: $e');
-      }
+    if (_sqlService == null) {
+      throw Exception('Supabase not initialized. DataService requires Supabase.');
     }
 
-    // Fallback to Firestore
     try {
-      return await _firestoreService.saveUserData(
+      return await _sqlService!.saveUserData(
         userId: userId,
         userData: userData,
       );
     } catch (e) {
-      print('Firestore saveUserData failed: $e');
+      print('Failed to save user data: $e');
       return false;
     }
   }
 
-  /// Update user data - tries Supabase first, falls back to Firestore
+  /// Update user data in Supabase
   Future<bool> updateUserData({
     required String userId,
     required Map<String, dynamic> updateData,
   }) async {
-    // Try Supabase first if configured
-    if (_sqlService != null) {
-      try {
-        return await _sqlService!.updateUserData(
-          userId: userId,
-          updateData: updateData,
-        );
-      } catch (e) {
-        // If Supabase fails, fallback to Firestore
-        print('Supabase updateUserData failed, using Firestore: $e');
-      }
+    if (_sqlService == null) {
+      throw Exception('Supabase not initialized. DataService requires Supabase.');
     }
 
-    // Fallback to Firestore
     try {
-      await _firestoreService.updateDocument(
-        collection: 'users',
-        docId: userId,
-        data: updateData,
+      return await _sqlService!.updateUserData(
+        userId: userId,
+        updateData: updateData,
       );
-      return true;
     } catch (e) {
-      print('Firestore updateUserData failed: $e');
+      print('Failed to update user data: $e');
       return false;
+    }
+  }
+
+  /// Get all users from Supabase
+  Future<List<UserModel>> getAllUsers() async {
+    if (_sqlService == null) {
+      throw Exception('Supabase not initialized. DataService requires Supabase.');
+    }
+
+    try {
+      final response = await _sqlService!.client
+          .from('users')
+          .select()
+          .order('created_at', ascending: false);
+      return (response as List)
+          .map((doc) => UserModel(
+                uid: doc['id'] as String,
+                email: doc['email'] as String?,
+                displayName: doc['display_name'] as String?,
+                photoURL: doc['photo_url'] as String?,
+                phoneNumber: doc['phone_number'] as String?,
+                role: UserRole.fromString(doc['role'] as String?),
+                createdAt: doc['created_at'] != null
+                    ? DateTime.parse(doc['created_at'] as String)
+                    : null,
+                updatedAt: doc['updated_at'] != null
+                    ? DateTime.parse(doc['updated_at'] as String)
+                    : null,
+              ))
+          .toList();
+    } catch (e) {
+      print('Failed to get all users: $e');
+      return [];
     }
   }
 }

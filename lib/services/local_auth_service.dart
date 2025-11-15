@@ -18,9 +18,23 @@ class LocalAuthService {
   /// Check if device has enrolled biometrics
   Future<bool> hasEnrolledBiometrics() async {
     try {
-      return await _localAuth.canCheckBiometrics ||
-          await _localAuth.isDeviceSupported();
+      // First check if device is supported
+      final isSupported = await _localAuth.isDeviceSupported();
+      if (!isSupported) {
+        return false;
+      }
+      
+      // Check if biometrics can be checked and are available
+      final canCheck = await _localAuth.canCheckBiometrics;
+      if (!canCheck) {
+        return false;
+      }
+      
+      // Check if there are any enrolled biometrics
+      final availableBiometrics = await _localAuth.getAvailableBiometrics();
+      return availableBiometrics.isNotEmpty;
     } catch (e) {
+      print('Error checking enrolled biometrics: $e');
       return false;
     }
   }
@@ -48,8 +62,11 @@ class LocalAuthService {
   Future<bool> setFingerprintEnabled(bool enabled) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return await prefs.setBool(_fingerprintEnabledKey, enabled);
+      final result = await prefs.setBool(_fingerprintEnabledKey, enabled);
+      print('Fingerprint enabled set to $enabled: $result');
+      return result;
     } catch (e) {
+      print('Error setting fingerprint enabled: $e');
       return false;
     }
   }
@@ -62,19 +79,26 @@ class LocalAuthService {
     bool stickyAuth = true,
   }) async {
     try {
+      print('Starting biometric authentication...');
+      
       // Check if device supports biometrics
       final isSupported = await isDeviceSupported();
+      print('Device supported: $isSupported');
       if (!isSupported) {
+        print('Device does not support biometrics');
         return false;
       }
 
       // Check if biometrics are enrolled
       final hasBiometrics = await hasEnrolledBiometrics();
+      print('Has enrolled biometrics: $hasBiometrics');
       if (!hasBiometrics) {
+        print('No enrolled biometrics found');
         return false;
       }
 
       // Authenticate
+      print('Calling authenticate...');
       final didAuthenticate = await _localAuth.authenticate(
         localizedReason: reason,
         options: AuthenticationOptions(
@@ -84,8 +108,10 @@ class LocalAuthService {
         ),
       );
 
+      print('Authentication result: $didAuthenticate');
       return didAuthenticate;
     } catch (e) {
+      print('Error during authentication: $e');
       return false;
     }
   }

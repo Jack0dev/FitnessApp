@@ -2,11 +2,11 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import '../services/auth_service.dart';
-import '../services/data_service.dart';
-import '../services/storage_service.dart';
-import '../models/user_model.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/auth_service.dart';
+import '../../services/data_service.dart';
+import '../../services/storage_service.dart';
+import '../../models/user_model.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final UserModel userModel;
@@ -68,7 +68,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  /// Convert image to Base64 string (for Firestore storage)
+  /// Convert image to Base64 string (for Supabase Storage fallback)
   /// Uses compute to avoid blocking main thread
   Future<String?> _imageToBase64(File imageFile) async {
     try {
@@ -80,7 +80,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         },
       );
       
-      // Compress more if needed (max 200KB for Firestore 1MB limit)
+      // Compress more if needed (max 200KB for Base64 storage limit)
       if (bytes.length > 200 * 1024) {
         // If image is too large, show error
         if (mounted) {
@@ -108,14 +108,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return null; // Return existing photoURL if no new image selected
     }
 
-    final user = FirebaseAuth.instance.currentUser;
+    final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return null;
 
     // Try Supabase Storage first
     try {
       final publicUrl = await _storageService.uploadImage(
         imageFile: _selectedImage!,
-        userId: user.uid,
+        userId: user.id,
       );
 
       if (publicUrl != null) {
@@ -173,13 +173,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         photoURL = await _uploadImage() ?? widget.userModel.photoURL;
       }
 
-      // Update Firebase Auth profile
+      // Update Supabase Auth profile
       await _authService.updateProfile(
         displayName: displayName.isEmpty ? null : displayName,
         photoURL: photoURL,
       );
 
-      // Update Firestore
+      // Update Supabase database
       final user = _authService.currentUser;
       if (user != null) {
         final updateData = <String, dynamic>{
@@ -196,7 +196,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         updateData.removeWhere((key, value) => value == null);
 
         await _dataService.updateUserData(
-          userId: user.uid,
+          userId: user.id,
           updateData: updateData,
         );
       }

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../services/auth_service.dart';
-import '../services/data_service.dart';
-import '../core/routes/app_routes.dart';
-import '../utils/validators.dart';
+import '../../services/auth_service.dart';
+import '../../services/data_service.dart';
+import '../../services/role_service.dart';
+import '../../core/routes/app_routes.dart';
+import '../../utils/validators.dart';
 
 class PhoneLoginScreen extends StatefulWidget {
   const PhoneLoginScreen({super.key});
@@ -21,7 +22,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
 
   bool _isLoading = false;
   bool _isOtpSent = false;
-  String? _verificationId;
+  // Removed _verificationId - Supabase doesn't need it
   int _resendTimer = 0;
 
   @override
@@ -57,42 +58,41 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
 
     final phoneNumber = Validators.formatPhoneNumber(_phoneController.text);
 
-    await _authService.verifyPhoneNumber(
-      phoneNumber: phoneNumber,
-      onCodeSent: (String verificationId) {
-        setState(() {
-          _verificationId = verificationId;
-          _isOtpSent = true;
-          _isLoading = false;
-          _resendTimer = 60; // 60s countdown
-        });
+    try {
+      await _authService.signInWithPhoneNumber(
+        phoneNumber: phoneNumber,
+      );
 
-        _startResendTimer();
+      setState(() {
+        _isOtpSent = true;
+        _isLoading = false;
+        _resendTimer = 60; // 60s countdown
+      });
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Verification code sent to your phone'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-      },
-      onError: (String error) {
-        setState(() {
-          _isLoading = false;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(error),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      },
-    );
+      _startResendTimer();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Verification code sent to your phone'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   void _startResendTimer() {
@@ -111,7 +111,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
   Future<void> _verifyOTP() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_verificationId == null) {
+    if (!_isOtpSent) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please request a verification code first'),
@@ -126,35 +126,45 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
     });
 
     try {
-      final userCredential = await _authService.signInWithPhoneNumber(
-        verificationId: _verificationId!,
-        smsCode: _otpController.text,
+      final response = await _authService.verifyPhoneOTP(
+        phoneNumber: _phoneController.text,
+        token: _otpController.text,
       );
 
-      if (userCredential?.user != null) {
-        final isNewUser = userCredential!.additionalUserInfo?.isNewUser ?? false;
+      final user = response.user;
+      if (user != null) {
+        // Check if this is a new user
+        final userModel = await _dataService.getUserData(user.id);
+        final isNewUser = userModel == null;
 
         if (isNewUser) {
           await _dataService.saveUserData(
-            userId: userCredential.user!.uid,
+            userId: user.id,
             userData: {
               'phoneNumber': _phoneController.text,
+              'provider': 'phone',
+              'role': 'user',
               'createdAt': DateTime.now(),
               'updatedAt': DateTime.now(),
             },
           );
         } else {
-          await _dataService.saveUserData(
-            userId: userCredential.user!.uid,
-            userData: {
+          // Update phone number if changed
+          await _dataService.updateUserData(
+            userId: user.id,
+            updateData: {
               'phoneNumber': _phoneController.text,
-              'updatedAt': DateTime.now(),
             },
           );
         }
 
+        // Get user data to determine role and redirect
         if (mounted) {
-          Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+          final updatedUserModel = await _dataService.getUserData(user.id);
+          final route = updatedUserModel != null 
+              ? RoleService.getDashboardRoute(updatedUserModel)
+              : AppRoutes.userDashboard;
+          Navigator.of(context).pushReplacementNamed(route);
         }
       }
     } catch (e) {
@@ -295,7 +305,6 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
                   onPressed: () {
                     setState(() {
                       _isOtpSent = false;
-                      _verificationId = null;
                       _otpController.clear();
                       _resendTimer = 0;
                     });

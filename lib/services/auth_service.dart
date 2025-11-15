@@ -1,60 +1,108 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import '../core/constants/app_constants.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Auth Service using Supabase Auth
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  SupabaseClient get _supabase {
+    if (!Supabase.instance.isInitialized) {
+      throw Exception('Supabase not initialized');
+    }
+    return Supabase.instance.client;
+  }
 
   /// Get current user
-  User? get currentUser => _auth.currentUser;
+  User? get currentUser => _supabase.auth.currentUser;
 
   /// Get auth state stream
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  Stream<AuthState> get authStateChanges => _supabase.auth.onAuthStateChange;
+
+  /// Get current session
+  Session? get currentSession => _supabase.auth.currentSession;
+
+  /// Refresh session using refresh token
+  /// Returns true if session was refreshed successfully
+  Future<bool> refreshSession() async {
+    try {
+      final session = await _supabase.auth.refreshSession();
+      return session.session != null;
+    } catch (e) {
+      print('Error refreshing session: $e');
+      return false;
+    }
+  }
+
+  /// Refresh session using provided refresh token
+  /// Returns AuthResponse if successful
+  Future<AuthResponse?> refreshSessionWithToken(String refreshToken) async {
+    try {
+      final response = await _supabase.auth.setSession(refreshToken);
+      return response;
+    } catch (e) {
+      print('Error refreshing session with token: $e');
+      return null;
+    }
+  }
 
   /// Sign in with email and password
-  Future<UserCredential?> signInWithEmailAndPassword({
+  Future<AuthResponse> signInWithEmailAndPassword({
     required String email,
     required String password,
   }) async {
     try {
-      final userCredential = await _auth.signInWithEmailAndPassword(
+      final response = await _supabase.auth.signInWithPassword(
         email: email,
         password: password,
       );
-      return userCredential;
-    } on FirebaseAuthException catch (e) {
+      return response;
+    } on AuthException catch (e) {
       throw _handleAuthException(e);
     } catch (e) {
-      throw AppConstants.loginError;
+      throw 'Failed to sign in. Please try again.';
     }
   }
 
   /// Register with email and password
-  Future<UserCredential?> registerWithEmailAndPassword({
+  Future<AuthResponse> registerWithEmailAndPassword({
     required String email,
     required String password,
+    String? displayName,
   }) async {
     try {
-      final userCredential = await _auth.createUserWithEmailAndPassword(
-        email: email,
+      // Trim and validate email format
+      final trimmedEmail = email.trim().toLowerCase();
+      
+      // Basic email validation
+      if (trimmedEmail.isEmpty) {
+        throw 'Email is required';
+      }
+      
+      final emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+      if (!emailRegex.hasMatch(trimmedEmail)) {
+        throw 'Please enter a valid email address';
+      }
+      
+      final response = await _supabase.auth.signUp(
+        email: trimmedEmail,
         password: password,
+        data: displayName != null ? {'display_name': displayName} : null,
       );
-      return userCredential;
-    } on FirebaseAuthException catch (e) {
+      return response;
+    } on AuthException catch (e) {
       throw _handleAuthException(e);
     } catch (e) {
-      throw AppConstants.signupError;
+      // If it's already a string error message, return it
+      if (e is String) {
+        throw e;
+      }
+      throw 'Failed to register. Please try again.';
     }
   }
 
   /// Sign out
+  /// Note: This only signs out from Supabase. 
+  /// Call UserPreferenceService.clearAllSavedData() separately to clear saved tokens/credentials.
   Future<void> signOut() async {
     try {
-      // Sign out from Firebase
-      await _auth.signOut();
-      // Also sign out from Google if signed in with Google
-      await signOutFromGoogle();
+      await _supabase.auth.signOut();
     } catch (e) {
       throw 'Failed to sign out. Please try again.';
     }
@@ -63,8 +111,8 @@ class AuthService {
   /// Reset password
   Future<void> resetPassword(String email) async {
     try {
-      await _auth.sendPasswordResetEmail(email: email);
-    } on FirebaseAuthException catch (e) {
+      await _supabase.auth.resetPasswordForEmail(email);
+    } on AuthException catch (e) {
       throw _handleAuthException(e);
     } catch (e) {
       throw 'Failed to send password reset email. Please try again.';
@@ -72,197 +120,168 @@ class AuthService {
   }
 
   /// Update user profile
-  Future<void> updateProfile({
+  Future<UserResponse> updateProfile({
     String? displayName,
     String? photoURL,
+    Map<String, dynamic>? data,
   }) async {
     try {
-      await currentUser?.updateDisplayName(displayName);
-      await currentUser?.updatePhotoURL(photoURL);
-      await currentUser?.reload();
+      final updateData = <String, dynamic>{};
+      
+      if (displayName != null) {
+        updateData['display_name'] = displayName;
+      }
+      if (photoURL != null) {
+        updateData['photo_url'] = photoURL;
+      }
+      if (data != null) {
+        updateData.addAll(data);
+      }
+
+      final response = await _supabase.auth.updateUser(
+        UserAttributes(data: updateData.isNotEmpty ? updateData : null),
+      );
+      return response;
+    } on AuthException catch (e) {
+      throw _handleAuthException(e);
     } catch (e) {
       throw 'Failed to update profile. Please try again.';
     }
   }
 
-  /// Send OTP to phone number
-  Future<void> verifyPhoneNumber({
-    required String phoneNumber,
-    required Function(String verificationId) onCodeSent,
-    required Function(String error) onError,
-  }) async {
+  /// Sign in with Google
+  /// 
+  /// Initiates OAuth flow with Google provider.
+  /// Opens browser for user to sign in with Google.
+  /// 
+  /// Returns true if OAuth flow was initiated successfully.
+  /// 
+  /// Throws:
+  /// - String error message if OAuth flow fails or is cancelled
+  /// - AuthException for authentication errors
+  Future<bool> signInWithGoogle() async {
     try {
-      await _auth.verifyPhoneNumber(
-        phoneNumber: phoneNumber,
-        verificationCompleted: (PhoneAuthCredential credential) async {
-          // Auto verification completed (Android only)
-          try {
-            await _auth.signInWithCredential(credential);
-          } catch (e) {
-            onError(e.toString());
-          }
-        },
-        verificationFailed: (FirebaseAuthException e) {
-          // Check for billing error specifically
-          String errorMessage = _handleAuthException(e);
-          
-          // If error message contains billing info, provide more details
-          if (e.code == 'billing-not-enabled' || 
-              e.message?.contains('BILLING_NOT_ENABLED') == true ||
-              e.message?.contains('billing') == true) {
-            // Check if using test number
-            final isTestNumber = phoneNumber.contains('650555');
-            if (isTestNumber) {
-              errorMessage = 'Test phone number requires Phone Auth to be enabled in Firebase Console.\n\n'
-                  'Steps:\n'
-                  '1. Go to Firebase Console\n'
-                  '2. Authentication > Sign-in method\n'
-                  '3. Enable "Phone" provider\n'
-                  '4. Use verification code: 123456 for built-in test numbers\n\n'
-                  'Note: Test numbers don\'t require billing but need Phone provider enabled.';
-            } else {
-              errorMessage = 'Billing is not enabled for your Firebase project.\n\n'
-                  'To enable Phone Authentication:\n'
-                  '1. Go to Firebase Console\n'
-                  '2. Authentication > Sign-in method > Enable "Phone"\n'
-                  '3. For real SMS, enable Billing Account in Project Settings\n'
-                  '4. For free testing, use test phone numbers (code: 123456)\n\n'
-                  'Real phone numbers require billing to send SMS codes.';
-            }
-          }
-          
-          onError(errorMessage);
-        },
-        codeSent: (String verificationId, int? resendToken) {
-          // SMS code was sent successfully
-          onCodeSent(verificationId);
-        },
-        codeAutoRetrievalTimeout: (String verificationId) {
-          // SMS auto-retrieval timed out (common on emulators or devices without SIM)
-          // Still allow manual code entry by calling onCodeSent with the verificationId
-          // This ensures the user can still enter the code manually
-          onCodeSent(verificationId);
-        },
-        timeout: const Duration(seconds: 60),
-      );
-    } catch (e) {
-      onError('Failed to send verification code: ${e.toString()}');
-    }
-  }
-
-  /// Sign in with phone number and OTP
-  Future<UserCredential?> signInWithPhoneNumber({
-    required String verificationId,
-    required String smsCode,
-  }) async {
-    try {
-      final credential = PhoneAuthProvider.credential(
-        verificationId: verificationId,
-        smsCode: smsCode,
+      // Initiate OAuth flow with Google provider
+      await _supabase.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: 'com.example.fitness_app://login-callback',
+        // Optional: Specify OAuth scopes (default includes email and profile)
+        // scopes: 'email profile openid',
+        // Optional: Additional query parameters
+        // queryParams: {},
       );
       
-      final userCredential = await _auth.signInWithCredential(credential);
-      return userCredential;
-    } on FirebaseAuthException catch (e) {
+      // signInWithOAuth returns immediately after opening browser
+      // The actual authentication happens asynchronously in the browser
+      // The app should listen to authStateChanges stream to detect completion
+      return true;
+    } on AuthException catch (e) {
+      // Handle specific OAuth errors
+      final message = e.message.toLowerCase();
+      
+      // OAuth state parameter missing or callback errors
+      if (message.contains('state') || 
+          message.contains('bad_oauth_callback') ||
+          message.contains('oauth callback')) {
+        throw 'OAuth flow was interrupted. Please try again and do not close the browser during sign in.';
+      }
+      
+      // Redirect URI mismatch
+      if (message.contains('redirect_uri') || message.contains('redirect uri')) {
+        throw 'OAuth configuration error. Please contact support.';
+      }
+      
+      // Use general auth exception handler for other errors
       throw _handleAuthException(e);
     } catch (e) {
-      throw 'Failed to verify code. Please try again.';
-    }
-  }
-
-  /// Resend OTP code
-  Future<void> resendOTP({
-    required String phoneNumber,
-    required Function(String verificationId) onCodeSent,
-    required Function(String error) onError,
-  }) async {
-    await verifyPhoneNumber(
-      phoneNumber: phoneNumber,
-      onCodeSent: onCodeSent,
-      onError: onError,
-    );
-  }
-
-  /// Sign in with Google
-  Future<UserCredential?> signInWithGoogle() async {
-    try {
-      // Trigger the authentication flow
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-
-      if (googleUser == null) {
-        // User cancelled the sign-in
-        throw 'Sign in cancelled';
+      final errorString = e.toString().toLowerCase();
+      
+      // User cancelled the OAuth flow
+      if (errorString.contains('cancelled') || errorString.contains('canceled')) {
+        throw 'Google sign in was cancelled';
       }
-
-      // Obtain the auth details from the request
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-
-      // Create a new credential
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      // Sign in to Firebase with the Google credential
-      final userCredential = await _auth.signInWithCredential(credential);
-      return userCredential;
-    } on FirebaseAuthException catch (e) {
-      throw _handleAuthException(e);
-    } catch (e) {
-      if (e.toString().contains('cancelled')) {
-        throw 'Sign in cancelled';
+      
+      // OAuth flow interruption
+      if (errorString.contains('state') || 
+          errorString.contains('oauth') || 
+          errorString.contains('bad_oauth_callback')) {
+        throw 'OAuth flow was interrupted. Please try again and do not close the browser during sign in.';
       }
+      
+      // Generic error
       throw 'Failed to sign in with Google. Please try again.';
     }
   }
 
-  /// Sign out from Google (should be called with signOut)
-  Future<void> signOutFromGoogle() async {
+  /// Sign in with phone number (OTP)
+  Future<void> signInWithPhoneNumber({
+    required String phoneNumber,
+  }) async {
     try {
-      await _googleSignIn.signOut();
+      await _supabase.auth.signInWithOtp(
+        phone: phoneNumber,
+      );
+    } on AuthException catch (e) {
+      throw _handleAuthException(e);
     } catch (e) {
-      // Ignore Google sign out errors
+      throw 'Failed to send OTP. Please try again.';
     }
   }
 
-  /// Handle Firebase Auth exceptions
-  String _handleAuthException(FirebaseAuthException e) {
-    switch (e.code) {
-      case 'weak-password':
-        return 'The password provided is too weak.';
-      case 'email-already-in-use':
-        return 'An account already exists for that email.';
-      case 'invalid-email':
-        return 'The email address is invalid.';
-      case 'user-not-found':
-        return 'No user found for that email.';
-      case 'wrong-password':
-        return 'Wrong password provided.';
-      case 'invalid-phone-number':
-        return 'The phone number format is invalid.';
-      case 'invalid-verification-code':
-        return 'The verification code is invalid.';
-      case 'invalid-verification-id':
-        return 'The verification ID is invalid.';
-      case 'session-expired':
-        return 'The SMS code has expired. Please request a new code.';
-      case 'too-many-requests':
-        return 'Too many requests. Please try again later.';
-      case 'quota-exceeded':
-        return 'SMS quota exceeded. Please try again later.';
-      case 'billing-not-enabled':
-      case 'BILLING_NOT_ENABLED':
-        return 'Billing is not enabled for your Firebase project. Please enable billing in Firebase Console to use Phone Authentication.';
-      case 'second-factor-required':
-      case '17089':
-        return 'This phone number is already enrolled with Multi-Factor Authentication. Please use a different phone number.';
-      case 'network-request-failed':
-        return AppConstants.networkError;
-      case 'operation-not-allowed':
-        return 'Phone authentication is not enabled. Please enable it in Firebase Console.';
-      default:
-        return e.message ?? AppConstants.unknownError;
+  /// Verify phone OTP
+  Future<AuthResponse> verifyPhoneOTP({
+    required String phoneNumber,
+    required String token,
+  }) async {
+    try {
+      final response = await _supabase.auth.verifyOTP(
+        phone: phoneNumber,
+        token: token,
+        type: OtpType.sms,
+      );
+      return response;
+    } on AuthException catch (e) {
+      throw _handleAuthException(e);
+    } catch (e) {
+      throw 'Failed to verify OTP. Please try again.';
     }
+  }
+
+  /// Handle AuthException and convert to user-friendly error message
+  String _handleAuthException(AuthException e) {
+    final message = e.message.toLowerCase();
+    
+    // Email already registered
+    if (message.contains('already registered') || message.contains('user already registered')) {
+      return 'Email already registered. Please sign in instead.';
+    }
+    
+    // Invalid email or password
+    if (message.contains('invalid login') || message.contains('invalid credentials')) {
+      return 'Invalid email or password. Please try again.';
+    }
+    
+    // Email not confirmed
+    if (message.contains('email not confirmed') || message.contains('email_not_confirmed')) {
+      return 'Please verify your email before signing in.';
+    }
+    
+    // Password too weak
+    if (message.contains('password') && message.contains('weak')) {
+      return 'Password is too weak. Please use a stronger password.';
+    }
+    
+    // Too many requests
+    if (message.contains('too many requests') || message.contains('rate limit')) {
+      return 'Too many requests. Please try again later.';
+    }
+    
+    // Invalid OTP
+    if (message.contains('otp') && (message.contains('invalid') || message.contains('expired'))) {
+      return 'Invalid or expired OTP. Please request a new code.';
+    }
+    
+    // Generic error - return original message if available
+    return e.message.isNotEmpty ? e.message : 'Authentication failed. Please try again.';
   }
 }
-
