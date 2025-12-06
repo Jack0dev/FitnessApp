@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../models/course_model.dart';
-import '../../services/course_service.dart';
-import '../../services/auth_service.dart';
+import '../../services/course/course_service.dart';
 import '../../models/user_model.dart';
-import '../../services/data_service.dart';
-import '../../models/user_role.dart';
+import '../../services/user/data_service.dart';
 
 class CourseFormScreen extends StatefulWidget {
   final CourseModel? course;
@@ -24,7 +22,6 @@ class _CourseFormScreenState extends State<CourseFormScreen> {
   final _maxStudentsController = TextEditingController();
   final _courseService = CourseService();
   final _dataService = DataService();
-  final _authService = AuthService();
   
   String? _selectedInstructorId;
   List<UserModel> _instructors = [];
@@ -102,14 +99,14 @@ class _CourseFormScreenState extends State<CourseFormScreen> {
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to save course')),
+            const SnackBar(content: Text('Không thể lưu khóa học')),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('Lỗi: $e')),
         );
       }
     } finally {
@@ -174,14 +171,14 @@ class _CourseFormScreenState extends State<CourseFormScreen> {
               DropdownButtonFormField<String>(
                 value: _selectedInstructorId,
                 decoration: const InputDecoration(
-                  labelText: 'Instructor (PT)',
+                  labelText: 'Giảng viên (PT)',
                   border: OutlineInputBorder(),
                 ),
                 items: [
-                  const DropdownMenuItem(value: null, child: Text('No instructor')),
+                  const DropdownMenuItem(value: null, child: Text('Không có giảng viên')),
                   ..._instructors.map((instructor) => DropdownMenuItem(
                         value: instructor.uid,
-                        child: Text(instructor.displayName ?? instructor.email ?? 'Unknown'),
+                        child: Text(instructor.displayName ?? instructor.email ?? 'Không xác định'),
                       )),
                 ],
                 onChanged: (value) {
@@ -282,5 +279,8 @@ class _CourseFormScreenState extends State<CourseFormScreen> {
     );
   }
 }
+
+
+
 
 

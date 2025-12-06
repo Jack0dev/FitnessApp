@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+
 import '../../models/course_model.dart';
 import '../../models/enrollment_model.dart';
-import 'user_course_lessons_screen.dart';
-import 'user_course_schedule_screen.dart';
+import '../../core/localization/app_localizations.dart';
+import '../../services/auth/auth_service.dart';
+import '../../services/course/course_service.dart';
 
-class UserCourseDetailScreen extends StatelessWidget {
+import 'user_course_lessons_screen.dart';
+import 'user_course_enroll_screen.dart';
+
+class UserCourseDetailScreen extends StatefulWidget {
   final CourseModel course;
   final EnrollmentModel enrollment;
 
@@ -15,41 +20,126 @@ class UserCourseDetailScreen extends StatelessWidget {
   });
 
   @override
+  State<UserCourseDetailScreen> createState() =>
+      _UserCourseDetailScreenState();
+}
+
+class _UserCourseDetailScreenState extends State<UserCourseDetailScreen> {
+  final _authService = AuthService();
+  final _courseService = CourseService();
+
+  bool _isLoading = false;
+  late EnrollmentModel _enrollment; // trạng thái enrollment hiện tại
+
+  @override
+  void initState() {
+    super.initState();
+    _enrollment = widget.enrollment;
+  }
+
+  /// Reload lại enrollment của user cho khóa học này từ Supabase
+  Future<void> _reloadEnrollment() async {
+    setState(() => _isLoading = true);
+    try {
+      final user = _authService.currentUser;
+      if (user == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final enrollments = await _courseService.getUserEnrollments(user.id);
+      final updated = enrollments.firstWhere(
+            (e) => e.courseId == widget.course.id,
+        orElse: () => _enrollment,
+      );
+
+      setState(() {
+        _enrollment = updated;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error reloading enrollment: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  /// Mở màn hình thanh toán / enroll
+  Future<void> _onCompletePaymentPressed() async {
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) => UserCourseEnrollScreen(
+          course: widget.course,
+          existingEnrollmentId: _enrollment.id, // DÙNG ENROLLMENT HIỆN TẠI
+        ),
+      ),
+    );
+
+    // Nếu UserCourseEnrollScreen trả về true → giả định thanh toán thành công
+    if (result == true) {
+      await _reloadEnrollment();
+    }
+  }
+
+  /// Mở danh sách bài học sau khi đã thanh toán
+  void _onLessonsPressed() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => UserCourseLessonsScreen(
+          course: widget.course,
+          enrollment: _enrollment,
+        ),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final hasPaid = _enrollment.paymentStatus == PaymentStatus.paid;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Course Details'),
+        title: Text(context.translate('course_detail')),
       ),
-      body: SingleChildScrollView(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Course Image
-            if (course.imageUrl != null)
+            // ========= ẢNH KHÓA HỌC =========
+            if (widget.course.imageUrl != null)
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.network(
-                  course.imageUrl!,
+                  widget.course.imageUrl!,
                   height: 200,
                   width: double.infinity,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    height: 200,
-                    color: Colors.grey[300],
-                    child: const Icon(
-                      Icons.image_not_supported,
-                      size: 64,
-                      color: Colors.grey,
-                    ),
-                  ),
+                  errorBuilder: (context, error, stackTrace) =>
+                      Container(
+                        height: 200,
+                        color: Colors.grey[300],
+                        child: const Icon(
+                          Icons.image_not_supported,
+                          size: 64,
+                          color: Colors.grey,
+                        ),
+                      ),
                 ),
               ),
-            if (course.imageUrl != null) const SizedBox(height: 16),
+            if (widget.course.imageUrl != null)
+              const SizedBox(height: 16),
 
-            // Course Title
+            // ========= TIÊU ĐỀ =========
             Text(
-              course.title,
+              widget.course.title,
               style: const TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -57,34 +147,31 @@ class UserCourseDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
 
-            // Enrollment Status Badge
+            // ========= TRẠNG THÁI THANH TOÁN (BADGE) =========
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 6,
+              ),
               decoration: BoxDecoration(
-                color: enrollment.paymentStatus == PaymentStatus.paid
-                    ? Colors.green[100]
-                    : Colors.orange[100],
+                color: hasPaid ? Colors.green[100] : Colors.orange[100],
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    enrollment.paymentStatus == PaymentStatus.paid
-                        ? Icons.check_circle
-                        : Icons.pending,
+                    hasPaid ? Icons.check_circle : Icons.pending,
                     size: 18,
-                    color: enrollment.paymentStatus == PaymentStatus.paid
+                    color: hasPaid
                         ? Colors.green[800]
                         : Colors.orange[800],
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    enrollment.paymentStatus == PaymentStatus.paid
-                        ? 'Payment Confirmed'
-                        : 'Pending Payment',
+                    hasPaid ? 'Payment Confirmed' : 'Pending Payment',
                     style: TextStyle(
-                      color: enrollment.paymentStatus == PaymentStatus.paid
+                      color: hasPaid
                           ? Colors.green[800]
                           : Colors.orange[800],
                       fontSize: 14,
@@ -96,7 +183,7 @@ class UserCourseDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            // Course Description
+            // ========= DESCRIPTION =========
             const Text(
               'Description',
               style: TextStyle(
@@ -106,7 +193,7 @@ class UserCourseDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              course.description,
+              widget.course.description,
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey[700],
@@ -115,7 +202,7 @@ class UserCourseDetailScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
-            // Course Details
+            // ========= COURSE DETAILS =========
             const Text(
               'Course Details',
               style: TextStyle(
@@ -127,38 +214,38 @@ class UserCourseDetailScreen extends StatelessWidget {
             _buildDetailRow(
               icon: Icons.person,
               label: 'Instructor',
-              value: course.instructorName ?? 'N/A',
+              value: widget.course.instructorName ?? 'N/A',
             ),
             _buildDetailRow(
               icon: Icons.timer,
-              label: 'Duration',
-              value: '${course.duration} days',
+              label: 'Thời lượng',
+              value: '${widget.course.duration} days',
             ),
             _buildDetailRow(
               icon: Icons.group,
               label: 'Max Students',
-              value: course.maxStudents.toString(),
+              value: widget.course.maxStudents.toString(),
             ),
             _buildDetailRow(
               icon: Icons.people,
               label: 'Current Students',
-              value: course.currentStudents.toString(),
+              value: widget.course.currentStudents.toString(),
             ),
             _buildDetailRow(
               icon: Icons.attach_money,
-              label: 'Price',
-              value: '\$${course.price.toStringAsFixed(0)}',
+              label: 'Giá',
+              value: '\$${widget.course.price.toStringAsFixed(0)}',
               valueColor: Colors.green,
             ),
             _buildDetailRow(
               icon: Icons.trending_up,
-              label: 'Level',
-              value: course.level.displayName,
-              valueColor: _getLevelColor(course.level),
+              label: 'Cấp độ',
+              value: widget.course.level.displayName,
+              valueColor: _getLevelColor(widget.course.level),
             ),
             const SizedBox(height: 24),
 
-            // Enrollment Information
+            // ========= ENROLLMENT INFO =========
             const Text(
               'Enrollment Information',
               style: TextStyle(
@@ -170,41 +257,35 @@ class UserCourseDetailScreen extends StatelessWidget {
             _buildDetailRow(
               icon: Icons.calendar_today,
               label: 'Enrolled Date',
-              value: _formatDate(enrollment.enrolledAt),
+              value: _formatDate(_enrollment.enrolledAt),
             ),
-            if (enrollment.paymentAt != null)
+            if (_enrollment.paymentAt != null)
               _buildDetailRow(
                 icon: Icons.payment,
                 label: 'Payment Date',
-                value: _formatDate(enrollment.paymentAt!),
+                value: _formatDate(_enrollment.paymentAt!),
               ),
-            if (enrollment.transactionId != null)
+            if (_enrollment.transactionId != null)
               _buildDetailRow(
                 icon: Icons.receipt,
                 label: 'Transaction ID',
-                value: enrollment.transactionId!,
+                value: _enrollment.transactionId!,
               ),
             _buildDetailRow(
               icon: Icons.attach_money,
               label: 'Amount Paid',
-              value: '\$${(enrollment.amountPaid ?? 0).toStringAsFixed(0)}',
+              value:
+              '\$${(_enrollment.amountPaid ?? 0).toStringAsFixed(0)}',
               valueColor: Colors.green,
             ),
             const SizedBox(height: 24),
 
-            // Action Buttons
-            if (enrollment.paymentStatus != PaymentStatus.paid)
+            // ========= ACTION BUTTONS =========
+            if (!hasPaid) ...[
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please complete payment to access course content'),
-                        backgroundColor: Colors.orange,
-                      ),
-                    );
-                  },
+                  onPressed: _onCompletePaymentPressed,
                   icon: const Icon(Icons.payment),
                   label: const Text('Complete Payment'),
                   style: ElevatedButton.styleFrom(
@@ -215,57 +296,21 @@ class UserCourseDetailScreen extends StatelessWidget {
                   ),
                 ),
               ),
-            if (enrollment.paymentStatus == PaymentStatus.paid) ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => UserCourseLessonsScreen(
-                              course: course,
-                              enrollment: enrollment,
-                            ),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.menu_book),
-                      label: const Text('View Documents'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        textStyle: const TextStyle(fontSize: 16),
-                      ),
-                    ),
+            ] else ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _onLessonsPressed,
+                  icon: const Icon(Icons.menu_book),
+                  label: const Text('Bài học'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    textStyle: const TextStyle(fontSize: 16),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => UserCourseScheduleScreen(
-                              course: course,
-                              enrollment: enrollment,
-                            ),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.calendar_today),
-                      label: const Text('View Schedule'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.purple,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        textStyle: const TextStyle(fontSize: 16),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-              const SizedBox(height: 12),
             ],
           ],
         ),
@@ -314,7 +359,8 @@ class UserCourseDetailScreen extends StatelessWidget {
   }
 
   String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+    return '${date.day}/${date.month}/${date.year} '
+        '${date.hour}:${date.minute.toString().padLeft(2, '0')}';
   }
 
   Color _getLevelColor(CourseLevel level) {
@@ -328,4 +374,3 @@ class UserCourseDetailScreen extends StatelessWidget {
     }
   }
 }
-

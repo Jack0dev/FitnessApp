@@ -1,9 +1,7 @@
 import 'dart:convert';
 import '../models/enrollment_model.dart';
-import 'course_service.dart';
-import 'sql_database_service.dart';
-import '../config/supabase_config.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'course/course_service.dart';
+import 'common/sql_database_service.dart';
 
 /// Service for handling payment processing
 /// Currently supports QR code payment simulation
@@ -54,10 +52,6 @@ class PaymentService {
           .select()
           .eq('id', enrollmentId)
           .single();
-
-      if (response == null) {
-        throw Exception('Enrollment not found');
-      }
 
       final enrollment = EnrollmentModel.fromSupabase(response);
 
@@ -119,10 +113,6 @@ class PaymentService {
           .select()
           .eq('id', enrollmentId)
           .single();
-
-      if (response == null) {
-        return false;
-      }
 
       final enrollment = EnrollmentModel.fromSupabase(response);
       final amount = enrollment.amountPaid ?? 0;

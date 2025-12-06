@@ -96,17 +96,45 @@ lib/
 │       ├── user_course_detail_screen.dart
 │       ├── user_course_lessons_screen.dart
 │       └── user_course_schedule_screen.dart
-├── services/            # Business logic và API services
-│   ├── auth_service.dart
-│   ├── course_service.dart
-│   ├── data_service.dart
-│   ├── lesson_service.dart
-│   ├── local_auth_service.dart
-│   ├── payment_service.dart
-│   ├── role_service.dart
-│   ├── sql_database_service.dart
-│   ├── storage_service.dart
-│   └── user_preference_service.dart
+├── services/            # Business logic và API services (đã được tổ chức theo module)
+│   ├── attendance/      # Services điểm danh
+│   │   ├── attendance_service.dart
+│   │   ├── session_attendance_service.dart
+│   │   └── attendance_services.dart
+│   ├── auth/           # Services xác thực
+│   │   ├── auth_service.dart
+│   │   ├── local_auth_service.dart
+│   │   └── auth_services.dart
+│   ├── chat/           # Services chat
+│   │   ├── chat_service.dart
+│   │   ├── room_service.dart
+│   │   └── chat_services.dart
+│   ├── common/          # Services chung
+│   │   ├── sql_database_service.dart
+│   │   ├── storage_service.dart
+│   │   ├── location_service.dart
+│   │   └── common_services.dart
+│   ├── content/         # Services nội dung
+│   │   ├── post_service.dart
+│   │   ├── meal_service.dart
+│   │   └── content_services.dart
+│   ├── course/          # Services khóa học
+│   │   ├── course_service.dart
+│   │   ├── lesson_service.dart
+│   │   ├── exercise_service.dart
+│   │   └── course_services.dart
+│   ├── payment/         # Services thanh toán
+│   │   ├── payment_service.dart
+│   │   └── payment_services.dart
+│   ├── session/         # Services session
+│   │   ├── session_service.dart
+│   │   └── session_services.dart
+│   ├── user/            # Services người dùng
+│   │   ├── data_service.dart
+│   │   ├── user_preference_service.dart
+│   │   ├── role_service.dart
+│   │   └── user_services.dart
+│   └── services.dart    # Main export (backward compatibility)
 ├── utils/               # Helper functions và utilities
 │   └── validators.dart
 ├── widgets/             # Reusable widgets
@@ -149,7 +177,8 @@ static const String storageBucketName = 'DataFitnessApp';
 ### 3. Database Setup
 Chạy các SQL scripts trong Supabase SQL Editor:
 - `database_migrations.sql` - Tạo tables và columns
-- `database_triggers.sql` - Tạo triggers cho tự động cập nhật `current_students`
+- `database_triggers_enrollment.sql` - Tạo triggers cho tự động cập nhật `current_students` khi enrollment thay đổi
+- `sync_current_students.sql` - Đồng bộ lại `current_students` cho dữ liệu cũ (nếu cần)
 
 ### 4. Storage Setup
 - Tạo bucket `DataFitnessApp` trong Supabase Storage
@@ -204,23 +233,226 @@ flutter run
 
 ### Services
 
-#### Authentication
-- **AuthService**: Quản lý authentication (login, register, OAuth, logout)
-- **LocalAuthService**: Xác thực vân tay/Face ID
-- **UserPreferenceService**: Lưu trữ credentials và preferences
+Services đã được tổ chức lại theo module để dễ quản lý và bảo trì.
 
-#### Database
-- **SqlDatabaseService**: Service chính để kết nối Supabase PostgreSQL
-- **DataService**: Quản lý user data trong database
-- **CourseService**: CRUD operations cho courses và enrollments
-- **LessonService**: CRUD operations cho course lessons
+#### 📁 Cấu trúc Services
 
-#### Storage
-- **StorageService**: Upload/download files từ Supabase Storage
+```
+services/
+├── attendance/          # Services liên quan đến điểm danh
+│   ├── attendance_service.dart
+│   ├── session_attendance_service.dart
+│   └── attendance_services.dart (export file)
+├── auth/               # Services liên quan đến xác thực
+│   ├── auth_service.dart
+│   ├── local_auth_service.dart
+│   └── auth_services.dart (export file)
+├── course/             # Services liên quan đến khóa học
+│   ├── course_service.dart
+│   ├── lesson_service.dart
+│   ├── exercise_service.dart
+│   └── course_services.dart (export file)
+├── user/               # Services liên quan đến người dùng
+│   ├── data_service.dart
+│   ├── user_preference_service.dart
+│   ├── role_service.dart
+│   └── user_services.dart (export file)
+├── content/            # Services liên quan đến nội dung
+│   ├── post_service.dart
+│   ├── meal_service.dart
+│   └── content_services.dart (export file)
+├── payment/            # Services liên quan đến thanh toán
+│   ├── payment_service.dart
+│   └── payment_services.dart (export file)
+├── chat/               # Services liên quan đến chat
+│   ├── chat_service.dart
+│   ├── room_service.dart
+│   └── chat_services.dart (export file)
+├── session/            # Services liên quan đến session
+│   ├── session_service.dart
+│   └── session_services.dart (export file)
+├── common/             # Services chung
+│   ├── sql_database_service.dart
+│   ├── storage_service.dart
+│   ├── location_service.dart
+│   └── common_services.dart (export file)
+└── services.dart       # Main export file (backward compatibility)
+```
 
-#### Business Logic
-- **PaymentService**: Xử lý payment logic
-- **RoleService**: Quản lý role-based routing
+#### 📦 Chi tiết các Services
+
+##### 🔐 Authentication (`auth/`)
+
+**AuthService**
+- Quản lý authentication flows (sign-in, registration, sign-out, password reset, OAuth)
+- Sử dụng Supabase Auth
+- Quản lý session và refresh tokens
+
+**LocalAuthService**
+- Xác thực vân tay/Face ID
+- Kiểm tra device support và enrolled biometrics
+- Lưu trữ fingerprint preferences
+
+##### 👤 User (`user/`)
+
+**DataService**
+- Quản lý user profile data trong Supabase
+- CRUD operations cho user information
+- Sử dụng SqlDatabaseService để tương tác với database
+
+**UserPreferenceService**
+- Lưu trữ credentials một cách an toàn (FlutterSecureStorage)
+- Quản lý language preferences
+- Lưu trữ session tokens
+- Hỗ trợ multiple email accounts
+
+**RoleService**
+- Utility functions để check user roles
+- Xác định navigation routes dựa trên role và profile completion
+
+##### 📚 Course (`course/`)
+
+**CourseService**
+- CRUD operations cho courses
+- Quản lý enrollments và payment status
+- Tự động cập nhật `current_students` khi payment thành công
+- Quản lý course members
+
+**LessonService**
+- CRUD operations cho course lessons/documents
+- Quản lý lesson exercises với batch loading để tối ưu performance
+- Load exercises và equipment từ relational tables
+
+**ExerciseService**
+- Quản lý exercises và equipment
+- Filter exercises theo category và difficulty
+- Get equipment for specific exercises
+
+##### 📅 Session (`session/`)
+
+**SessionService**
+- Quản lý sessions/lịch dạy của PT
+- CRUD operations cho sessions
+- Filter sessions theo date range và trainer
+
+##### ✅ Attendance (`attendance/`)
+
+**AttendanceService**
+- Quản lý điểm danh tổng quát
+
+**SessionAttendanceService**
+- Quản lý điểm danh theo session cụ thể
+- QR code attendance scanning
+
+##### 📝 Content (`content/`)
+
+**PostService**
+- Quản lý posts và social features
+- Like, comment, share functionality
+- Get posts by user với counts từ post_detail
+- Batch loading user info để tối ưu performance
+
+**MealService**
+- Quản lý meal plans
+- CRUD operations cho meals và meal items
+- Filter meals theo course hoặc user
+
+##### 💬 Chat (`chat/`)
+
+**ChatService**
+- Quản lý chat messages giữa PT và students
+- Send/receive messages
+- Mark messages as read
+- Get conversations và unread count
+
+**RoomService**
+- Quản lý phòng chat
+- CRUD operations cho rooms
+
+##### 💳 Payment (`payment/`)
+
+**PaymentService**
+- Xử lý payment processing
+- Parse QR code data
+- Confirm payment từ QR code
+- Simulate payment confirmation (for testing)
+
+##### 🔧 Common (`common/`)
+
+**SqlDatabaseService**
+- Service chính để kết nối Supabase PostgreSQL
+- Encapsulates direct database interactions
+- Được sử dụng bởi tất cả services khác
+
+**StorageService**
+- Upload/download files từ Supabase Storage
+- Upload images, videos, và lesson files
+- Delete files từ storage
+- Hỗ trợ multiple folders (profile_images, course_lessons, post_media)
+
+**LocationService**
+- Quản lý location services
+- GPS và location tracking
+
+#### 📖 Cách sử dụng Services
+
+**Import từ module cụ thể (khuyến nghị):**
+```dart
+// Import từ module auth
+import 'package:fitness_app/services/auth/auth_services.dart';
+
+// Import từ module course
+import 'package:fitness_app/services/course/course_services.dart';
+
+// Import từ module user
+import 'package:fitness_app/services/user/user_services.dart';
+
+// Import từ module common
+import 'package:fitness_app/services/common/common_services.dart';
+```
+
+**Import tất cả services (backward compatibility):**
+```dart
+import 'package:fitness_app/services/services.dart';
+```
+
+#### 🔄 Migration Guide
+
+Các file cũ ở thư mục gốc vẫn được giữ lại để backward compatibility. Tuy nhiên, nên dần dần chuyển sang sử dụng imports từ các module tương ứng.
+
+**Trước:**
+```dart
+import 'package:fitness_app/services/auth_service.dart';
+import 'package:fitness_app/services/course_service.dart';
+import 'package:fitness_app/services/storage_service.dart';
+```
+
+**Sau:**
+```dart
+import 'package:fitness_app/services/auth/auth_services.dart';
+import 'package:fitness_app/services/course/course_services.dart';
+import 'package:fitness_app/services/common/common_services.dart';
+```
+
+#### 📋 Best Practices
+
+1. **Import từ module cụ thể**: Luôn import từ module export file thay vì import trực tiếp từ service file
+2. **Sử dụng SqlDatabaseService**: Tất cả database operations nên đi qua SqlDatabaseService
+3. **Error Handling**: Luôn handle errors và return appropriate values (null, empty list, false)
+4. **Logging**: Sử dụng print statements với emoji để dễ debug (✅, ❌, ⚠️, ℹ️)
+5. **Batch Loading**: Khi load nhiều related data, sử dụng batch queries để tránh N+1 problem
+
+#### 🔍 Dependencies
+
+Tất cả services phụ thuộc vào:
+- `supabase_flutter`: Supabase client
+- `../../config/supabase_config.dart`: Supabase configuration
+- `../../models/`: Data models
+
+Một số services có dependencies đặc biệt:
+- **LocalAuthService**: `local_auth`, `shared_preferences`
+- **UserPreferenceService**: `flutter_secure_storage`, `shared_preferences`
+- **StorageService**: `dart:io` cho File operations
 
 ### Models
 

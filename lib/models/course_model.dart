@@ -1,5 +1,3 @@
-import 'user_role.dart';
-
 /// Course model
 class CourseModel {
   final String id;
@@ -12,7 +10,10 @@ class CourseModel {
   final int duration; // in days
   final int maxStudents;
   final int currentStudents;
+  final DateTime? startDate; // Ngày bắt đầu khóa học
+  final DateTime? endDate; // Ngày kết thúc khóa học
   final List<String>? tags;
+  final List<String>? equipment; // Dụng cụ tập: tạ đơn, tạ đòn, cáp, dây kháng lực,...
   final CourseLevel level; // Course difficulty level
   final CourseStatus status;
   final DateTime createdAt;
@@ -29,7 +30,10 @@ class CourseModel {
     required this.duration,
     required this.maxStudents,
     this.currentStudents = 0,
+    this.startDate,
+    this.endDate,
     this.tags,
+    this.equipment,
     this.level = CourseLevel.beginner,
     this.status = CourseStatus.active,
     required this.createdAt,
@@ -49,10 +53,13 @@ class CourseModel {
       duration: doc['duration'] as int? ?? 0,
       maxStudents: doc['maxStudents'] as int? ?? 0,
       currentStudents: doc['currentStudents'] as int? ?? 0,
+      startDate: _parseTimestamp(doc['startDate']),
+      endDate: _parseTimestamp(doc['endDate']),
       tags: doc['tags'] != null ? List<String>.from(doc['tags']) : null,
+      equipment: doc['equipment'] != null ? List<String>.from(doc['equipment']) : null,
       level: CourseLevel.fromString(doc['level'] as String?),
       status: CourseStatus.fromString(doc['status'] as String?),
-      createdAt: _parseTimestamp(doc['createdAt']),
+      createdAt: _parseTimestamp(doc['createdAt']) ?? DateTime.now(),
       updatedAt: _parseTimestamp(doc['updatedAt']) ?? DateTime.now(),
     );
   }
@@ -70,7 +77,14 @@ class CourseModel {
       duration: doc['duration'] as int? ?? 0,
       maxStudents: doc['max_students'] as int? ?? 0,
       currentStudents: doc['current_students'] as int? ?? 0,
+      startDate: doc['start_date'] != null
+          ? DateTime.parse(doc['start_date'] as String)
+          : null,
+      endDate: doc['end_date'] != null
+          ? DateTime.parse(doc['end_date'] as String)
+          : null,
       tags: doc['tags'] != null ? List<String>.from(doc['tags']) : null,
+      equipment: doc['equipment'] != null ? List<String>.from(doc['equipment']) : null,
       level: CourseLevel.fromString(doc['level'] as String?),
       status: CourseStatus.fromString(doc['status'] as String?),
       createdAt: doc['created_at'] != null
@@ -82,8 +96,8 @@ class CourseModel {
     );
   }
 
-  static DateTime _parseTimestamp(dynamic timestamp) {
-    if (timestamp == null) return DateTime.now();
+  static DateTime? _parseTimestamp(dynamic timestamp) {
+    if (timestamp == null) return null;
     if (timestamp is DateTime) return timestamp;
     try {
       return timestamp.toDate() as DateTime;
@@ -94,7 +108,15 @@ class CourseModel {
           return DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
         }
       }
-      return DateTime.now();
+      // Try parsing as ISO string
+      if (timestamp is String) {
+        try {
+          return DateTime.parse(timestamp);
+        } catch (e) {
+          return null;
+        }
+      }
+      return null;
     }
   }
 
@@ -110,7 +132,10 @@ class CourseModel {
       'duration': duration,
       'maxStudents': maxStudents,
       'currentStudents': currentStudents,
+      if (startDate != null) 'startDate': startDate,
+      if (endDate != null) 'endDate': endDate,
       if (tags != null) 'tags': tags,
+      if (equipment != null) 'equipment': equipment,
       'level': level.value,
       'status': status.value,
       'createdAt': createdAt,
@@ -131,7 +156,10 @@ class CourseModel {
       'duration': duration,
       'max_students': maxStudents,
       'current_students': currentStudents,
+      if (startDate != null) 'start_date': startDate!.toIso8601String(),
+      if (endDate != null) 'end_date': endDate!.toIso8601String(),
       if (tags != null) 'tags': tags,
+      if (equipment != null) 'equipment': equipment,
       'level': level.value,
       'status': status.value,
       'created_at': createdAt.toIso8601String(),
@@ -150,7 +178,10 @@ class CourseModel {
     int? duration,
     int? maxStudents,
     int? currentStudents,
+    DateTime? startDate,
+    DateTime? endDate,
     List<String>? tags,
+    List<String>? equipment,
     CourseLevel? level,
     CourseStatus? status,
     DateTime? createdAt,
@@ -167,7 +198,10 @@ class CourseModel {
       duration: duration ?? this.duration,
       maxStudents: maxStudents ?? this.maxStudents,
       currentStudents: currentStudents ?? this.currentStudents,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
       tags: tags ?? this.tags,
+      equipment: equipment ?? this.equipment,
       level: level ?? this.level,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
@@ -181,9 +215,9 @@ class CourseModel {
 
 /// Course level enum
 enum CourseLevel {
-  beginner('beginner', 'Beginner'),
-  intermediate('intermediate', 'Intermediate'),
-  advanced('advanced', 'Advanced');
+  beginner('beginner', 'Người mới bắt đầu'),
+  intermediate('intermediate', 'Trung cấp'),
+  advanced('advanced', 'Nâng cao');
 
   final String value;
   final String displayName;
@@ -201,10 +235,10 @@ enum CourseLevel {
 
 /// Course status enum
 enum CourseStatus {
-  active('active', 'Active'),
-  inactive('inactive', 'Inactive'),
-  completed('completed', 'Completed'),
-  cancelled('cancelled', 'Cancelled');
+  active('active', 'Đang hoạt động'),
+  inactive('inactive', 'Không hoạt động'),
+  completed('completed', 'Hoàn thành'),
+  canceled('canceled', 'Đã hủy');
 
   final String value;
   final String displayName;

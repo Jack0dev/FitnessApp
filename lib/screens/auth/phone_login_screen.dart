@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../services/auth_service.dart';
-import '../../services/data_service.dart';
-import '../../services/role_service.dart';
+import '../../services/auth/auth_service.dart';
+import '../../services/user/data_service.dart';
+import '../../services/user/role_service.dart';
 import '../../core/routes/app_routes.dart';
 import '../../utils/validators.dart';
 

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import '../../services/auth_service.dart';
-import '../../services/data_service.dart';
-import '../../services/user_preference_service.dart';
-import '../../services/role_service.dart';
+import '../../services/auth/auth_service.dart';
+import '../../services/user/data_service.dart';
+import '../../services/user/user_preference_service.dart';
+import '../../services/user/role_service.dart';
 import '../../models/user_model.dart';
 import '../../core/routes/app_routes.dart';
 import '../../widgets/loading_widget.dart';
+import '../../widgets/widgets.dart';
+import '../../core/constants/design_tokens.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -46,6 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _isLoading = false;
         });
         // Redirect to appropriate dashboard based on role
+        // RoleService will check if profile is completed
         if (mounted) {
           final route = RoleService.getDashboardRoute(userModel);
           Navigator.of(context).pushReplacementNamed(route);
@@ -90,7 +93,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Home'),
+        title: const CustomText(
+          text: 'Home',
+          variant: TextVariant.headlineMedium,
+          color: DesignTokens.textPrimary,
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.person),
@@ -112,68 +119,58 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: Colors.blue,
                   ),
                   const SizedBox(height: 24),
-                  const Text(
-                    'Welcome to Fitness App',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  const CustomText(
+                    text: 'Chào mừng đến với Ứng dụng Fitness',
+                    variant: TextVariant.displaySmall,
+                    color: DesignTokens.textPrimary,
+                    fontWeight: FontWeight.bold,
                   ),
                   const SizedBox(height: 16),
                   if (user != null && _userModel != null) ...[
-                    Text(
-                      'Hello, ${_userModel!.displayName ?? user.userMetadata?['display_name'] ?? "User"}!',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.grey[700],
-                        fontWeight: FontWeight.w500,
-                      ),
+                    CustomText(
+                      text: 'Hello, ${_userModel!.displayName ?? user.userMetadata?['display_name'] ?? "User"}!',
+                      variant: TextVariant.headlineSmall,
+                      color: DesignTokens.textSecondary,
+                      fontWeight: FontWeight.w500,
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      'Email: ${_userModel!.email ?? user.email ?? "N/A"}',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey[600],
-                      ),
+                    CustomText(
+                      text: 'Email: ${_userModel!.email ?? user.email ?? "N/A"}',
+                      variant: TextVariant.bodyLarge,
+                      color: DesignTokens.textSecondary,
                     ),
                     const SizedBox(height: 24),
-                    Container(
-                      padding: const EdgeInsets.all(16),
+                    CustomCard(
+                      variant: CardVariant.gymFresh,
                       margin: const EdgeInsets.symmetric(horizontal: 24),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
                       child: Column(
                         children: [
                           const Icon(
                             Icons.check_circle,
-                            color: Colors.green,
+                            color: DesignTokens.success,
                             size: 48,
                           ),
                           const SizedBox(height: 8),
-                          const Text(
-                            'Database Connected!',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          const CustomText(
+                            text: 'Database Connected!',
+                            variant: TextVariant.titleLarge,
+                            color: DesignTokens.textPrimary,
+                            fontWeight: FontWeight.bold,
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            'Your data is being synced',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
+                          CustomText(
+                            text: 'Your data is being synced',
+                            variant: TextVariant.bodySmall,
+                            color: DesignTokens.textSecondary,
                           ),
                         ],
                       ),
                     ),
                   ],
                   const SizedBox(height: 48),
-                  ElevatedButton(
+                  CustomButton(
+                    label: 'Sign Out',
+                    icon: Icons.logout,
                     onPressed: () async {
                       try {
                         // Clear all saved data (credentials + tokens) when signing out
@@ -186,12 +183,25 @@ class _HomeScreenState extends State<HomeScreen> {
                       } catch (e) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(e.toString())),
+                            SnackBar(
+                              content: CustomText(
+                                text: e.toString(),
+                                variant: TextVariant.bodyMedium,
+                                color: Colors.white,
+                              ),
+                              backgroundColor: DesignTokens.error,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
                           );
                         }
                       }
                     },
-                    child: const Text('Sign Out'),
+                    variant: ButtonVariant.primary,
+                    size: ButtonSize.medium,
+                    backgroundColor: DesignTokens.error,
                   ),
                 ],
               ),

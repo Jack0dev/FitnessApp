@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'lesson_exercise_model.dart';
 
 /// Course Lesson model - Represents a lesson/document in a course
 class CourseLessonModel {
@@ -7,9 +8,8 @@ class CourseLessonModel {
   final int lessonNumber; // Lesson order number (1, 2, 3, ...)
   final String title;
   final String? description;
-  final String fileUrl; // URL to image or video file
-  final LessonFileType fileType; // image or video
-  final DateTime? lessonDate; // Optional scheduled date for this lesson
+  final String? backgroundImageUrl; // URL to background image
+  final List<LessonExerciseModel> exercises; // Danh sách bài tập
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -19,9 +19,8 @@ class CourseLessonModel {
     required this.lessonNumber,
     required this.title,
     this.description,
-    required this.fileUrl,
-    required this.fileType,
-    this.lessonDate,
+    this.backgroundImageUrl,
+    this.exercises = const [],
     required this.createdAt,
     required this.updatedAt,
   });
@@ -34,11 +33,14 @@ class CourseLessonModel {
       lessonNumber: doc['lesson_number'] as int? ?? 0,
       title: doc['title'] as String,
       description: doc['description'] as String?,
-      fileUrl: doc['file_url'] as String,
-      fileType: LessonFileType.fromString(doc['file_type'] as String?),
-      lessonDate: doc['lesson_date'] != null
-          ? DateTime.parse(doc['lesson_date'] as String)
-          : null,
+      backgroundImageUrl: doc['background_image_url'] as String? ?? doc['file_url'] as String?, // Backward compatibility
+      exercises: doc['exercises'] != null
+          ? (doc['exercises'] is List
+              ? (doc['exercises'] as List)
+                  .map((e) => LessonExerciseModel.fromMap(e as Map<String, dynamic>))
+                  .toList()
+              : [])
+          : [],
       createdAt: doc['created_at'] != null
           ? DateTime.parse(doc['created_at'] as String)
           : DateTime.now(),
@@ -49,19 +51,44 @@ class CourseLessonModel {
   }
 
   /// Convert to Map for Supabase
-  Map<String, dynamic> toSupabase() {
+  /// Note: exercises are now saved separately in relational tables, 
+  /// but we include them here for backward compatibility if needed
+  Map<String, dynamic> toSupabase({bool includeExercises = false}) {
     return {
       'id': id,
       'course_id': courseId,
       'lesson_number': lessonNumber,
       'title': title,
       if (description != null) 'description': description,
-      'file_url': fileUrl,
-      'file_type': fileType.value,
-      if (lessonDate != null) 'lesson_date': lessonDate!.toIso8601String(),
+      if (backgroundImageUrl != null) 'background_image_url': backgroundImageUrl,
+      if (includeExercises) 'exercises': exercises.map((e) => e.toMap()).toList(),
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
+  }
+
+  CourseLessonModel copyWith({
+    String? id,
+    String? courseId,
+    int? lessonNumber,
+    String? title,
+    String? description,
+    String? backgroundImageUrl,
+    List<LessonExerciseModel>? exercises,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return CourseLessonModel(
+      id: id ?? this.id,
+      courseId: courseId ?? this.courseId,
+      lessonNumber: lessonNumber ?? this.lessonNumber,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      backgroundImageUrl: backgroundImageUrl ?? this.backgroundImageUrl,
+      exercises: exercises ?? this.exercises,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
   }
 }
 

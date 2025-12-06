@@ -7,12 +7,15 @@ import '../../screens/auth/register_screen.dart';
 import '../../screens/profile/profile_screen.dart';
 import '../../screens/profile/edit_profile_screen.dart';
 import '../../screens/profile/settings_screen.dart';
+import '../../screens/profile/create_post_screen.dart';
+import '../../screens/onboarding/onboarding_screen.dart';
 import '../../screens/admin/admin_dashboard_screen.dart';
 import '../../screens/user/user_dashboard_screen.dart';
 import '../../screens/pt/pt_dashboard_screen.dart';
 import '../../screens/admin/courses_management_screen.dart';
 import '../../screens/admin/users_management_screen.dart';
 import '../../models/user_model.dart';
+import 'route_guard.dart';
 
 class AppRoutes {
   static const String splash = '/';
@@ -23,6 +26,8 @@ class AppRoutes {
   static const String profile = '/profile';
   static const String editProfile = '/edit-profile';
   static const String settings = '/settings';
+  static const String createPost = '/create-post';
+  static const String onboarding = '/onboarding';
   
   // Dashboard routes
   static const String adminDashboard = '/admin-dashboard';
@@ -35,9 +40,7 @@ class AppRoutes {
   static const String adminPTs = '/admin/pts';
   
   // User routes
-  static const String coursesList = '/courses';
   static const String courseDetail = '/course-detail';
-  static const String myCourses = '/my-courses';
   
   // PT routes
   static const String ptStudents = '/pt/students';
@@ -58,13 +61,32 @@ class AppRoutes {
         return EditProfileScreen(userModel: userModel);
       },
       settings: (context) => const SettingsScreen(),
-      // Dashboard routes
-      adminDashboard: (context) => const AdminDashboardScreen(),
-      userDashboard: (context) => const UserDashboardScreen(),
-      ptDashboard: (context) => const PTDashboardScreen(),
-      // Admin routes
-      adminCourses: (context) => const CoursesManagementScreen(),
-      adminUsers: (context) => const UsersManagementScreen(),
+      createPost: (context) => const CreatePostScreen(),
+      onboarding: (context) => const OnboardingScreen(),
+      
+      // Dashboard routes - Protected by role
+      adminDashboard: (context) => RouteGuard.protectedRoute(
+        requiredRole: UserRole.admin,
+        child: const AdminDashboardScreen(),
+      ),
+      userDashboard: (context) => RouteGuard.protectedRoute(
+        requiredRole: UserRole.user,
+        child: const UserDashboardScreen(),
+      ),
+      ptDashboard: (context) => RouteGuard.protectedRoute(
+        requiredRole: UserRole.pt,
+        child: const PTDashboardScreen(),
+      ),
+      
+      // Admin routes - Protected by admin role
+      adminCourses: (context) => RouteGuard.protectedRoute(
+        requiredRole: UserRole.admin,
+        child: const CoursesManagementScreen(),
+      ),
+      adminUsers: (context) => RouteGuard.protectedRoute(
+        requiredRole: UserRole.admin,
+        child: const UsersManagementScreen(),
+      ),
     };
   }
 }

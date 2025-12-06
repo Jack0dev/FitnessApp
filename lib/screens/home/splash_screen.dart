@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../core/routes/app_routes.dart';
-import '../../services/data_service.dart';
-import '../../services/auth_service.dart';
-import '../../services/user_preference_service.dart';
-import '../../services/role_service.dart';
+import '../../services/user/data_service.dart';
+import '../../services/auth/auth_service.dart';
+import '../../services/user/role_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -15,7 +14,6 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen> {
   final _dataService = DataService();
   final _authService = AuthService();
-  final _userPreferenceService = UserPreferenceService();
 
   @override
   void initState() {
@@ -42,7 +40,7 @@ class _SplashScreenState extends State<SplashScreen> {
       try {
         final userModel = await _dataService.getUserData(user.id);
         if (userModel != null) {
-          // Redirect based on role
+          // Redirect based on role (will check profile completion)
           final route = RoleService.getDashboardRoute(userModel);
           if (mounted) {
             Navigator.of(context).pushReplacementNamed(route);
@@ -84,7 +82,7 @@ class _SplashScreenState extends State<SplashScreen> {
             ),
             const SizedBox(height: 24),
             const Text(
-              'Fitness App',
+              'Ứng dụng Fitness',
               style: TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.bold,

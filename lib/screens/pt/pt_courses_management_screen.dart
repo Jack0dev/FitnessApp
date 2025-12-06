@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../models/course_model.dart';
-import '../../services/course_service.dart';
-import '../../services/auth_service.dart';
-import '../../widgets/loading_widget.dart';
+import '../../services/course/course_service.dart';
+import '../../services/auth/auth_service.dart';
+import '../../core/constants/design_tokens.dart';
+import '../../widgets/widgets.dart';
 import 'pt_course_form_screen.dart';
 import 'pt_course_detail_screen.dart';
+import 'package:intl/intl.dart';
 
 class PTCoursesManagementScreen extends StatefulWidget {
   const PTCoursesManagementScreen({super.key});
@@ -16,6 +18,7 @@ class PTCoursesManagementScreen extends StatefulWidget {
 class _PTCoursesManagementScreenState extends State<PTCoursesManagementScreen> {
   final _courseService = CourseService();
   final _authService = AuthService();
+  final formatter = NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
   List<CourseModel> _courses = [];
   bool _isLoading = true;
   String? _error;
@@ -55,17 +58,17 @@ class _PTCoursesManagementScreenState extends State<PTCoursesManagementScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Course'),
-        content: Text('Are you sure you want to delete "${course.title}"? This action cannot be undone.'),
+        title: const Text('Xóa khóa học'),
+        content: Text('Bạn có chắc chắn muốn xóa "${course.title}"? Hành động này không thể hoàn tác.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: const Text('Hủy'),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: const Text('Xóa'),
           ),
         ],
       ),
@@ -75,12 +78,12 @@ class _PTCoursesManagementScreenState extends State<PTCoursesManagementScreen> {
       final success = await _courseService.deleteCourse(course.id);
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Course deleted successfully')),
+          const SnackBar(content: Text('Xóa khóa học thành công')),
         );
         _loadCourses();
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to delete course'), backgroundColor: Colors.red),
+          const SnackBar(content: Text('Không thể xóa khóa học'), backgroundColor: Colors.red),
         );
       }
     }
@@ -88,12 +91,37 @@ class _PTCoursesManagementScreenState extends State<PTCoursesManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
     return Scaffold(
+      backgroundColor: DesignTokens.background,
       appBar: AppBar(
-        title: const Text('My Courses'),
+        elevation: 0,
+        backgroundColor: DesignTokens.surface,
+
+        // --- 1. Thêm nút Back vào vị trí leading (bên trái tiêu đề) ---
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: DesignTokens.textPrimary), // Hoặc Icons.arrow_back_ios
+          onPressed: () {
+            Navigator.of(context).pop(); // Thực hiện hành động quay lại
+          },
+          tooltip: 'Back',
+        ),
+
+        title: CustomText(
+          text: 'Khóa học',
+          variant: TextVariant.headlineMedium,
+          color: DesignTokens.textPrimary,
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add),
+            icon: Icon(Icons.refresh, color: DesignTokens.textPrimary),
+            onPressed: _loadCourses,
+            tooltip: 'Refresh',
+          ),
+          IconButton(
+            icon: Icon(Icons.add, color: DesignTokens.textPrimary),
             onPressed: () async {
               final result = await Navigator.of(context).push(
                 MaterialPageRoute(
@@ -106,171 +134,360 @@ class _PTCoursesManagementScreenState extends State<PTCoursesManagementScreen> {
             },
             tooltip: 'Create New Course',
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadCourses,
-            tooltip: 'Refresh',
-          ),
         ],
       ),
       body: _isLoading
           ? const LoadingWidget()
           : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Error: $_error',
-                        style: TextStyle(color: Colors.grey[600]),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadCourses,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                )
+              ? _buildErrorState(colorScheme)
               : RefreshIndicator(
                   onRefresh: _loadCourses,
                   child: _courses.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.school_outlined, size: 64, color: Colors.grey[400]),
-                              const SizedBox(height: 16),
-                              Text(
-                                'No courses yet',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  color: Colors.grey[600],
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Create your first course to start teaching!',
-                                style: TextStyle(color: Colors.grey[500]),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 24),
-                              ElevatedButton.icon(
-                                onPressed: () async {
-                                  final result = await Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) => const PTCourseFormScreen(),
-                                    ),
-                                  );
-                                  if (result == true) {
-                                    _loadCourses();
-                                  }
+                      ? _buildEmptyState(colorScheme)
+                      : Column(
+                          children: [
+                            _buildStatsHeader(colorScheme),
+                            Expanded(
+                              child: ListView.builder(
+                                padding: const EdgeInsets.all(16),
+                                itemCount: _courses.length,
+                                itemBuilder: (context, index) {
+                                  final course = _courses[index];
+                                  return _buildCourseCard(course, colorScheme, index);
                                 },
-                                icon: const Icon(Icons.add),
-                                label: const Text('Create Course'),
                               ),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _courses.length,
-                          itemBuilder: (context, index) {
-                            final course = _courses[index];
-                            return Card(
-                              elevation: 2,
-                              margin: const EdgeInsets.only(bottom: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: InkWell(
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) => PTCourseDetailScreen(course: course),
-                                    ),
-                                  ).then((_) => _loadCourses());
-                                },
-                                borderRadius: BorderRadius.circular(12),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              course.title,
-                                              style: const TextStyle(
-                                                fontSize: 20,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ),
-                                          _StatusBadge(status: course.status),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        course.description,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      Row(
-                                        children: [
-                                          Icon(Icons.people, size: 16, color: Colors.grey[600]),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            '${course.currentStudents}/${course.maxStudents} students',
-                                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                                          ),
-                                          const SizedBox(width: 16),
-                                          Icon(Icons.attach_money, size: 16, color: Colors.grey[600]),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            '\$${course.price.toStringAsFixed(0)}',
-                                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                                          ),
-                                          const Spacer(),
-                                          IconButton(
-                                            icon: const Icon(Icons.edit, size: 20),
-                                            onPressed: () async {
-                                              final result = await Navigator.of(context).push(
-                                                MaterialPageRoute(
-                                                  builder: (context) => PTCourseFormScreen(course: course),
-                                                ),
-                                              );
-                                              if (result == true) {
-                                                _loadCourses();
-                                              }
-                                            },
-                                            tooltip: 'Edit',
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.delete, size: 20, color: Colors.red),
-                                            onPressed: () => _deleteCourse(course),
-                                            tooltip: 'Delete',
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
+                            ),
+                          ],
                         ),
                 ),
+    );
+  }
+
+  Widget _buildErrorState(ColorScheme colorScheme) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(DesignTokens.spacingXL),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(DesignTokens.spacingLG),
+              decoration: BoxDecoration(
+                color: DesignTokens.error.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.error_outline,
+                size: 64,
+                color: DesignTokens.error,
+              ),
+            ),
+            const SizedBox(height: DesignTokens.spacingLG),
+            CustomText(
+              text: 'Error loading courses',
+              variant: TextVariant.headlineSmall,
+              color: DesignTokens.textPrimary,
+            ),
+            const SizedBox(height: DesignTokens.spacingSM),
+            CustomText(
+              text: _error ?? 'Unknown error',
+              variant: TextVariant.bodyMedium,
+              color: DesignTokens.textSecondary,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: DesignTokens.spacingLG),
+            CustomButton(
+              label: 'Thử lại',
+              icon: Icons.refresh,
+              onPressed: _loadCourses,
+              variant: ButtonVariant.primary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(ColorScheme colorScheme) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(DesignTokens.spacingXL),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(DesignTokens.spacingLG),
+              decoration: BoxDecoration(
+                color: DesignTokens.primary.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.school_outlined,
+                size: 64,
+                color: DesignTokens.primary,
+              ),
+            ),
+            const SizedBox(height: DesignTokens.spacingLG),
+            CustomText(
+              text: 'No courses yet',
+              variant: TextVariant.displaySmall,
+              color: DesignTokens.textPrimary,
+            ),
+            const SizedBox(height: DesignTokens.spacingSM),
+            CustomText(
+              text: 'Create your first course to start teaching!',
+              variant: TextVariant.bodyLarge,
+              color: DesignTokens.textSecondary,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: DesignTokens.spacingXL),
+            CustomButton(
+              label: 'Tạo khóa học',
+              icon: Icons.add,
+              onPressed: () async {
+                final result = await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const PTCourseFormScreen(),
+                  ),
+                );
+                if (result == true) {
+                  _loadCourses();
+                }
+              },
+              variant: ButtonVariant.primary,
+              size: ButtonSize.large,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatsHeader(ColorScheme colorScheme) {
+    final activeCount = _courses.where((c) => c.status == CourseStatus.active).length;
+    final totalStudents = _courses.fold<int>(0, (sum, c) => sum + c.currentStudents);
+    final totalRevenue = _courses.fold<double>(0, (sum, c) => sum + (c.price * c.currentStudents));
+
+    return Container(
+      margin: const EdgeInsets.all(DesignTokens.spacingMD),
+      padding: const EdgeInsets.all(DesignTokens.spacingLG),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            DesignTokens.primary,
+            DesignTokens.secondary,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusLG),
+        boxShadow: DesignTokens.shadowLG,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildStatItem(Icons.school, '${_courses.length}', 'Courses', colorScheme),
+          _buildStatItem(Icons.check_circle, '$activeCount', 'Active', colorScheme),
+          _buildStatItem(Icons.people, '$totalStudents', 'Students', colorScheme),
+          _buildStatItem(Icons.attach_money, formatter.format(totalRevenue), 'Revenue', colorScheme),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatItem(IconData icon, String value, String label, ColorScheme colorScheme) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.white, size: 28),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: Colors.white.withOpacity(0.9),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCourseCard(CourseModel course, ColorScheme colorScheme, int index) {
+    return CustomCard(
+      variant: CardVariant.white,
+      margin: const EdgeInsets.only(bottom: DesignTokens.spacingMD),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PTCourseDetailScreen(course: course),
+          ),
+        ).then((_) => _loadCourses());
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(DesignTokens.spacingSM),
+                decoration: BoxDecoration(
+                  color: course.status == CourseStatus.active
+                      ? DesignTokens.success.withOpacity(0.1)
+                      : DesignTokens.textLight.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(DesignTokens.radiusMD),
+                ),
+                child: Icon(
+                  Icons.school,
+                  color: course.status == CourseStatus.active
+                      ? DesignTokens.success
+                      : DesignTokens.textLight,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: DesignTokens.spacingSM),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CustomText(
+                      text: course.title,
+                      variant: TextVariant.titleLarge,
+                      color: DesignTokens.textPrimary,
+                      fontWeight: FontWeight.bold,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    _StatusBadge(status: course.status),
+                  ],
+                ),
+              ),
+              PopupMenuButton(
+                icon: Icon(Icons.more_vert, color: DesignTokens.textPrimary),
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit, size: 20, color: DesignTokens.textPrimary),
+                        const SizedBox(width: 8),
+                        CustomText(
+                          text: 'Chỉnh sửa',
+                          variant: TextVariant.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete, size: 20, color: DesignTokens.error),
+                        const SizedBox(width: 8),
+                        CustomText(
+                          text: 'Xóa',
+                          variant: TextVariant.bodyMedium,
+                          color: DesignTokens.error,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                onSelected: (value) {
+                  if (value == 'edit') {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PTCourseFormScreen(course: course),
+                      ),
+                    ).then((result) {
+                      if (result == true) {
+                        _loadCourses();
+                      }
+                    });
+                  } else if (value == 'delete') {
+                    _deleteCourse(course);
+                  }
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: DesignTokens.spacingSM),
+          CustomText(
+            text: course.description,
+            variant: TextVariant.bodyMedium,
+            color: DesignTokens.textSecondary,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: DesignTokens.spacingMD),
+          Row(
+            children: [
+              Expanded(
+                child: _buildInfoChip(
+                  Icons.attach_money,
+                  formatter.format(course.price),
+                  DesignTokens.info,
+                ),
+              ),
+              const SizedBox(width: DesignTokens.spacingSM),
+              Expanded(
+                child: _buildInfoChip(
+                  Icons.people,
+                  '${course.currentStudents}/${course.maxStudents}',
+                  DesignTokens.success,
+                ),
+              ),
+              const SizedBox(width: DesignTokens.spacingSM),
+              Expanded(
+                child: _buildInfoChip(
+                  Icons.calendar_today,
+                  '${course.duration} days',
+                  DesignTokens.warning,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(IconData icon, String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: DesignTokens.spacingSM, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusSM),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Flexible(
+            child: CustomText(
+              text: text,
+              variant: TextVariant.bodySmall,
+              color: color,
+              fontWeight: FontWeight.w600,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -287,20 +504,20 @@ class _StatusBadge extends StatelessWidget {
 
     switch (status) {
       case CourseStatus.active:
-        color = Colors.green;
+        color = DesignTokens.success;
         text = 'Active';
         break;
       case CourseStatus.inactive:
-        color = Colors.grey;
+        color = DesignTokens.textLight;
         text = 'Inactive';
         break;
       case CourseStatus.completed:
-        color = Colors.blue;
+        color = DesignTokens.info;
         text = 'Completed';
         break;
-      case CourseStatus.cancelled:
-        color = Colors.red;
-        text = 'Cancelled';
+      case CourseStatus.canceled:
+        color = DesignTokens.error;
+        text = 'Đã hủy';
         break;
     }
 
@@ -308,12 +525,14 @@ class _StatusBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(DesignTokens.radiusMD),
         border: Border.all(color: color.withOpacity(0.3)),
       ),
-      child: Text(
-        text,
-        style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w500),
+      child: CustomText(
+        text: text,
+        variant: TextVariant.bodySmall,
+        color: color,
+        fontWeight: FontWeight.w500,
       ),
     );
   }

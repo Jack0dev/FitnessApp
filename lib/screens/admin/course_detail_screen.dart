@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/course_model.dart';
-import '../../services/course_service.dart';
+import '../../services/course/course_service.dart';
 import '../../widgets/loading_widget.dart';
 
 class CourseDetailScreen extends StatefulWidget {
@@ -119,5 +119,8 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     );
   }
 }
+
+
+
 
 

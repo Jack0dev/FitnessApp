@@ -1,5 +1,5 @@
 import '../models/user_model.dart';
-import '../models/user_role.dart';
+import '../core/routes/app_routes.dart';
 
 /// Service to manage user roles and permissions
 class RoleService {
@@ -19,17 +19,23 @@ class RoleService {
   }
 
   /// Get dashboard route based on user role
+  /// If profile is not completed, redirects to onboarding
   static String getDashboardRoute(UserModel? user) {
-    if (user == null) return '/login';
+    if (user == null) return AppRoutes.login;
+    
+    // Check if profile is completed (only for regular users)
+    // Admin and PT can skip onboarding
+    if (user.role == UserRole.user && !user.isProfileCompleted) {
+      return AppRoutes.onboarding;
+    }
     
     switch (user.role) {
       case UserRole.admin:
-        return '/admin-dashboard';
+        return AppRoutes.adminDashboard;
       case UserRole.pt:
-        return '/pt-dashboard';
+        return AppRoutes.ptDashboard;
       case UserRole.user:
-      default:
-        return '/user-dashboard';
+        return AppRoutes.userDashboard;
     }
   }
 
@@ -48,5 +54,8 @@ class RoleService {
     return isAdmin(user) || isPT(user);
   }
 }
+
+
+
 
 

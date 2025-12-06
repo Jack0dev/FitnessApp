@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/course_model.dart';
 import '../../models/enrollment_model.dart';
 import '../../models/course_lesson_model.dart';
-import '../../services/lesson_service.dart';
+import '../../services/course/lesson_service.dart';
 import '../../widgets/loading_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -173,12 +173,12 @@ class _UserCourseLessonsScreenState extends State<UserCourseLessonsScreen> {
                                       ),
                                     ],
                                     const SizedBox(height: 12),
-                                    // Preview based on file type
-                                    if (lesson.fileType == LessonFileType.image)
+                                    // Background Image Preview
+                                    if (lesson.backgroundImageUrl != null)
                                       ClipRRect(
                                         borderRadius: BorderRadius.circular(8),
                                         child: Image.network(
-                                          lesson.fileUrl,
+                                          lesson.backgroundImageUrl!,
                                           height: 150,
                                           width: double.infinity,
                                           fit: BoxFit.cover,
@@ -192,70 +192,72 @@ class _UserCourseLessonsScreenState extends State<UserCourseLessonsScreen> {
                                             ),
                                           ),
                                         ),
-                                      )
-                                    else
-                                      Container(
-                                        height: 150,
-                                        width: double.infinity,
-                                        decoration: BoxDecoration(
-                                          color: Colors.black87,
-                                          borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    // Exercises List
+                                    if (lesson.exercises.isNotEmpty) ...[
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        'Bài tập:',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.grey[700],
                                         ),
-                                        child: Stack(
-                                          alignment: Alignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.play_circle_outline,
-                                              size: 64,
-                                              color: Colors.white.withOpacity(0.8),
-                                            ),
-                                            Positioned(
-                                              bottom: 8,
-                                              right: 8,
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 8,
-                                                  vertical: 4,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      ...lesson.exercises.map((exercise) {
+                                        return Card(
+                                          margin: const EdgeInsets.only(bottom: 8),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(12),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  exercise.exerciseName,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 14,
+                                                  ),
                                                 ),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.black.withOpacity(0.7),
-                                                  borderRadius: BorderRadius.circular(4),
-                                                ),
-                                                child: const Row(
-                                                  mainAxisSize: MainAxisSize.min,
+                                                if (exercise.equipment.isNotEmpty) ...[
+                                                  const SizedBox(height: 4),
+                                                  Wrap(
+                                                    spacing: 4,
+                                                    children: exercise.equipment.map((eq) {
+                                                      return Chip(
+                                                        label: Text(eq, style: const TextStyle(fontSize: 11)),
+                                                        padding: EdgeInsets.zero,
+                                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                      );
+                                                    }).toList(),
+                                                  ),
+                                                ],
+                                                const SizedBox(height: 4),
+                                                Wrap(
+                                                  spacing: 8,
                                                   children: [
-                                                    Icon(Icons.video_library, size: 16, color: Colors.white),
-                                                    SizedBox(width: 4),
-                                                    Text(
-                                                      'Video',
-                                                      style: TextStyle(
-                                                        color: Colors.white,
-                                                        fontSize: 12,
-                                                      ),
-                                                    ),
+                                                    if (exercise.sets != null)
+                                                      Text('${exercise.sets} hiệp', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                                                    if (exercise.reps != null)
+                                                      Text('${exercise.reps} rep', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                                                    if (exercise.restTimeSeconds != null)
+                                                      Text('Nghỉ: ${exercise.restTimeSeconds}s', style: TextStyle(fontSize: 12, color: Colors.grey[700])),
                                                   ],
                                                 ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    const SizedBox(height: 12),
-                                    // Lesson Date (if available)
-                                    if (lesson.lessonDate != null)
-                                      Row(
-                                        children: [
-                                          Icon(Icons.calendar_today, size: 14, color: Colors.grey[600]),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            'Scheduled: ${_formatDate(lesson.lessonDate!)}',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey[600],
+                                                if (exercise.notes != null && exercise.notes!.isNotEmpty) ...[
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    exercise.notes!,
+                                                    style: TextStyle(fontSize: 12, color: Colors.grey[600], fontStyle: FontStyle.italic),
+                                                  ),
+                                                ],
+                                              ],
                                             ),
                                           ),
-                                        ],
-                                      ),
+                                        );
+                                      }),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -329,69 +331,118 @@ class _UserCourseLessonsScreenState extends State<UserCourseLessonsScreen> {
                         ),
                         const SizedBox(height: 16),
                       ],
-                      // Media Preview
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: lesson.fileType == LessonFileType.image
-                            ? Image.network(
-                                lesson.fileUrl,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) => Container(
-                                  height: 200,
-                                  color: Colors.grey[300],
-                                  child: const Icon(
-                                    Icons.image_not_supported,
-                                    size: 50,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              )
-                            : Container(
-                                height: 200,
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: Colors.black87,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.play_circle_outline,
-                                      size: 64,
-                                      color: Colors.white.withOpacity(0.8),
+                      // Background Image Preview
+                      if (lesson.backgroundImageUrl != null)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            lesson.backgroundImageUrl!,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Container(
+                              height: 200,
+                              color: Colors.grey[300],
+                              child: const Icon(
+                                Icons.image_not_supported,
+                                size: 50,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                        ),
+                      // Exercises List
+                      if (lesson.exercises.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Bài tập:',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        ...lesson.exercises.map((exercise) {
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    exercise.exerciseName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
                                     ),
-                                    Positioned(
-                                      bottom: 16,
-                                      child: ElevatedButton.icon(
-                                        onPressed: () async {
-                                          final url = Uri.parse(lesson.fileUrl);
-                                          if (await canLaunchUrl(url)) {
-                                            await launchUrl(url, mode: LaunchMode.externalApplication);
-                                          } else {
-                                            if (context.mounted) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                const SnackBar(
-                                                  content: Text('Cannot open video URL'),
-                                                  backgroundColor: Colors.red,
-                                                ),
-                                              );
-                                            }
-                                          }
-                                        },
-                                        icon: const Icon(Icons.play_arrow),
-                                        label: const Text('Play Video'),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.blue,
-                                          foregroundColor: Colors.white,
+                                  ),
+                                  if (exercise.equipment.isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: exercise.equipment.map((eq) {
+                                        return Chip(
+                                          label: Text(eq, style: const TextStyle(fontSize: 12)),
+                                          padding: EdgeInsets.zero,
+                                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 12,
+                                    children: [
+                                      if (exercise.sets != null)
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.repeat, size: 16, color: Colors.grey[700]),
+                                            const SizedBox(width: 4),
+                                            Text('${exercise.sets} hiệp', style: TextStyle(fontSize: 14, color: Colors.grey[700])),
+                                          ],
                                         ),
+                                      if (exercise.reps != null)
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.fitness_center, size: 16, color: Colors.grey[700]),
+                                            const SizedBox(width: 4),
+                                            Text('${exercise.reps} rep', style: TextStyle(fontSize: 14, color: Colors.grey[700])),
+                                          ],
+                                        ),
+                                      if (exercise.restTimeSeconds != null)
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.timer, size: 16, color: Colors.grey[700]),
+                                            const SizedBox(width: 4),
+                                            Text('Nghỉ: ${exercise.restTimeSeconds}s', style: TextStyle(fontSize: 14, color: Colors.grey[700])),
+                                          ],
+                                        ),
+                                    ],
+                                  ),
+                                  if (exercise.notes != null && exercise.notes!.isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[100],
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        exercise.notes!,
+                                        style: TextStyle(fontSize: 13, color: Colors.grey[700], fontStyle: FontStyle.italic),
                                       ),
                                     ),
                                   ],
-                                ),
+                                ],
                               ),
-                      ),
+                            ),
+                          );
+                        }),
+                      ],
                     ],
                   ),
                 ),
@@ -407,32 +458,32 @@ class _UserCourseLessonsScreenState extends State<UserCourseLessonsScreen> {
                       onPressed: () => Navigator.of(context).pop(),
                       child: const Text('Close'),
                     ),
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        final url = Uri.parse(lesson.fileUrl);
-                        if (await canLaunchUrl(url)) {
-                          await launchUrl(url, mode: LaunchMode.externalApplication);
-                        } else {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Cannot open file URL'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
+                    if (lesson.backgroundImageUrl != null) ...[
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          final url = Uri.parse(lesson.backgroundImageUrl!);
+                          if (await canLaunchUrl(url)) {
+                            await launchUrl(url, mode: LaunchMode.externalApplication);
+                          } else {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Không thể mở URL hình ảnh'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
                           }
-                        }
-                      },
-                      icon: Icon(
-                        lesson.fileType == LessonFileType.image ? Icons.image : Icons.play_arrow,
+                        },
+                        icon: const Icon(Icons.image),
+                        label: const Text('Xem hình ảnh'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                        ),
                       ),
-                      label: Text(lesson.fileType == LessonFileType.image ? 'View Image' : 'Play Video'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -441,10 +492,6 @@ class _UserCourseLessonsScreenState extends State<UserCourseLessonsScreen> {
         ),
       ),
     );
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
   }
 }
 

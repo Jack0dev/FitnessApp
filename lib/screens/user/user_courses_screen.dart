@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 import '../../models/course_model.dart';
 import '../../models/enrollment_model.dart';
-import '../../services/course_service.dart';
-import '../../services/auth_service.dart';
+import '../../services/course/course_service.dart';
+import '../../services/auth/auth_service.dart';
 import '../../widgets/loading_widget.dart';
-import 'course_enroll_screen.dart';
+import '../../core/localization/app_localizations.dart';
+import '../../core/constants/design_tokens.dart';
+import 'user_course_enroll_screen.dart';
 import 'user_course_detail_screen.dart';
 
-class CoursesScreen extends StatefulWidget {
-  const CoursesScreen({super.key});
+class UserCoursesScreen extends StatefulWidget {
+  const UserCoursesScreen({super.key});
 
   @override
-  State<CoursesScreen> createState() => _CoursesScreenState();
+  State<UserCoursesScreen> createState() => _UserCoursesScreenState();
 }
 
-class _CoursesScreenState extends State<CoursesScreen> with SingleTickerProviderStateMixin {
+class _UserCoursesScreenState extends State<UserCoursesScreen> with SingleTickerProviderStateMixin {
   final _courseService = CourseService();
   final _authService = AuthService();
   late TabController _tabController;
@@ -148,7 +150,7 @@ class _CoursesScreenState extends State<CoursesScreen> with SingleTickerProvider
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Filter Courses'),
+          title: Text(context.translate('filter')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -225,12 +227,12 @@ class _CoursesScreenState extends State<CoursesScreen> with SingleTickerProvider
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Courses'),
+        title: Text(context.translate('courses')),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(text: 'All Courses', icon: Icon(Icons.library_books)),
-            Tab(text: 'My Courses', icon: Icon(Icons.school)),
+          tabs: [
+            Tab(text: context.translate('courses'), icon: const Icon(Icons.library_books)),
+            Tab(text: context.translate('my_courses'), icon: const Icon(Icons.school)),
           ],
         ),
         actions: [
@@ -273,9 +275,18 @@ class _CoursesScreenState extends State<CoursesScreen> with SingleTickerProvider
                     : null,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: DesignTokens.accent, width: 2),
                 ),
                 filled: true,
-                fillColor: Colors.grey[100],
+                fillColor: Colors.white,
               ),
             ),
           ),
@@ -376,7 +387,7 @@ class _CoursesScreenState extends State<CoursesScreen> with SingleTickerProvider
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (context) => CourseEnrollScreen(course: course),
+                  builder: (context) => UserCourseEnrollScreen(course: course),
                 ),
               );
             },
@@ -471,116 +482,131 @@ class _AllCourseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
+    return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (course.imageUrl != null)
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                child: Image.network(
-                  course.imageUrl!,
-                  height: 200,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (course.imageUrl != null)
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  child: Image.network(
+                    course.imageUrl!,
                     height: 200,
-                    color: Colors.grey[300],
-                    child: const Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      height: 200,
+                      color: Colors.grey[300],
+                      child: const Icon(Icons.image_not_supported, size: 64, color: Colors.grey),
+                    ),
                   ),
+                )
+              else
+                Container(
+                  height: 200,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  ),
+                  child: const Icon(Icons.fitness_center, size: 64, color: Colors.grey),
                 ),
-              )
-            else
-              Container(
-                height: 200,
-                color: Colors.grey[300],
-                child: const Icon(Icons.fitness_center, size: 64, color: Colors.grey),
-              ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          course.title,
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      _StatusBadge(status: course.status),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    course.description,
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Icon(Icons.person, size: 16, color: Colors.grey[600]),
-                      const SizedBox(width: 4),
-                      Text(course.instructorName ?? 'N/A', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-                      const Spacer(),
-                      Icon(Icons.trending_up, size: 16, color: _getLevelColor(course.level)),
-                      const SizedBox(width: 4),
-                      Text(course.level.displayName, style: TextStyle(fontSize: 14, color: _getLevelColor(course.level))),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
-                      const SizedBox(width: 4),
-                      Text('${course.duration} days', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-                      const Spacer(),
-                      Icon(Icons.people, size: 16, color: Colors.grey[600]),
-                      const SizedBox(width: 4),
-                      Text('${course.currentStudents}/${course.maxStudents}', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '\$${course.price.toStringAsFixed(0)}',
-                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green),
-                      ),
-                      if (course.isFull)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.red[100],
-                            borderRadius: BorderRadius.circular(4),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            course.title,
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                           ),
-                          child: const Text('Full', style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.w500)),
-                        )
-                      else
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.green[100],
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text('Available', style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.w500)),
                         ),
-                    ],
-                  ),
-                ],
+                        _StatusBadge(status: course.status),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      course.description,
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Icon(Icons.person, size: 16, color: Colors.grey[600]),
+                        const SizedBox(width: 4),
+                        Text(course.instructorName ?? 'N/A', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+                        const Spacer(),
+                        Icon(Icons.trending_up, size: 16, color: _getLevelColor(course.level)),
+                        const SizedBox(width: 4),
+                        Text(course.level.displayName, style: TextStyle(fontSize: 14, color: _getLevelColor(course.level))),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                        const SizedBox(width: 4),
+                        Text('${course.duration} days', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+                        const Spacer(),
+                        Icon(Icons.people, size: 16, color: Colors.grey[600]),
+                        const SizedBox(width: 4),
+                        Text('${course.currentStudents}/${course.maxStudents}', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '\$${course.price.toStringAsFixed(0)}',
+                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green),
+                        ),
+                        if (course.isFull)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.red[100],
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text('Full', style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.w500)),
+                          )
+                        else
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.green[100],
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text('Available', style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.w500)),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
           ],
+        ),
         ),
       ),
     );
@@ -611,18 +637,29 @@ class _MyCourseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 4,
+    return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               if (course.imageUrl != null) ...[
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
@@ -652,52 +689,69 @@ class _MyCourseCard extends StatelessWidget {
                 style: TextStyle(fontSize: 14, color: Colors.grey[700]),
               ),
               const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  _buildInfoChip(icon: Icons.person, label: 'Instructor', value: course.instructorName ?? 'N/A'),
-                  _buildInfoChip(icon: Icons.timer, label: 'Duration', value: '${course.duration} days'),
-                  _buildInfoChip(icon: Icons.group, label: 'Students', value: '${course.currentStudents}/${course.maxStudents}'),
+                  Flexible(
+                    child: _buildInfoChip(icon: Icons.person, label: 'Instructor', value: course.instructorName ?? 'N/A'),
+                  ),
+                  Flexible(
+                    child: _buildInfoChip(icon: Icons.timer, label: 'Thời lượng', value: '${course.duration} ngày'),
+                  ),
+                  Flexible(
+                    child: _buildInfoChip(icon: Icons.group, label: 'Học viên', value: '${course.currentStudents}/${course.maxStudents}'),
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: enrollment.paymentStatus == PaymentStatus.paid ? Colors.green[100] : Colors.orange[100],
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          enrollment.paymentStatus == PaymentStatus.paid ? Icons.check_circle : Icons.pending,
-                          size: 16,
-                          color: enrollment.paymentStatus == PaymentStatus.paid ? Colors.green[800] : Colors.orange[800],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          enrollment.paymentStatus == PaymentStatus.paid ? 'Paid' : 'Pending',
-                          style: TextStyle(
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: enrollment.paymentStatus == PaymentStatus.paid ? Colors.green[100] : Colors.orange[100],
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            enrollment.paymentStatus == PaymentStatus.paid ? Icons.check_circle : Icons.pending,
+                            size: 16,
                             color: enrollment.paymentStatus == PaymentStatus.paid ? Colors.green[800] : Colors.orange[800],
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              enrollment.paymentStatus == PaymentStatus.paid ? 'Paid' : 'Pending',
+                              style: TextStyle(
+                                color: enrollment.paymentStatus == PaymentStatus.paid ? Colors.green[800] : Colors.orange[800],
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  Text(
-                    'Enrolled: ${_formatDate(enrollment.enrolledAt)}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  Flexible(
+                    child: Text(
+                      'Enrolled: ${_formatDate(enrollment.enrolledAt)}',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
                   ),
                 ],
               ),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -709,8 +763,21 @@ class _MyCourseCard extends StatelessWidget {
       children: [
         Icon(icon, size: 16, color: Colors.grey[600]),
         const SizedBox(width: 4),
-        Text('$label: ', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-        Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+        Flexible(
+          child: Text(
+            '$label: ',
+            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        Flexible(
+          child: Text(
+            value,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        ),
       ],
     );
   }
@@ -743,7 +810,7 @@ class _StatusBadge extends StatelessWidget {
         color = Colors.blue;
         text = 'Completed';
         break;
-      case CourseStatus.cancelled:
+      case CourseStatus.canceled:
         color = Colors.red;
         text = 'Cancelled';
         break;

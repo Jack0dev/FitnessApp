@@ -2,12 +2,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../services/auth_service.dart';
-import '../../services/data_service.dart';
-import '../../services/role_service.dart';
+import '../../services/auth/auth_service.dart';
+import '../../services/user/data_service.dart';
+import '../../services/user/role_service.dart';
 import '../../core/routes/app_routes.dart';
 import '../../utils/validators.dart';
 import '../../core/constants/test_phone_numbers.dart';
+import '../../core/constants/design_tokens.dart';
+import '../../widgets/widgets.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -153,7 +155,12 @@ class _RegisterScreenState extends State<RegisterScreen>
               ),
             );
           }
-          Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+          // Check if profile is completed, redirect to onboarding if not
+          final userModel = await _dataService.getUserData(user.id);
+          final route = userModel != null 
+              ? RoleService.getDashboardRoute(userModel)
+              : AppRoutes.onboarding;
+          Navigator.of(context).pushReplacementNamed(route);
         }
       } else {
         throw 'Registration failed. User was not created.';
@@ -225,7 +232,7 @@ class _RegisterScreenState extends State<RegisterScreen>
               final updatedUserModel = await _dataService.getUserData(user.id);
               final route = updatedUserModel != null 
                   ? RoleService.getDashboardRoute(updatedUserModel)
-                  : AppRoutes.userDashboard;
+                  : AppRoutes.onboarding;
               
               if (mounted) {
                 setState(() {
@@ -474,7 +481,7 @@ class _RegisterScreenState extends State<RegisterScreen>
           final updatedUserModel = await _dataService.getUserData(user.id);
           final route = updatedUserModel != null 
               ? RoleService.getDashboardRoute(updatedUserModel)
-              : AppRoutes.userDashboard;
+              : AppRoutes.onboarding;
           Navigator.of(context).pushReplacementNamed(route);
         }
       }
@@ -532,241 +539,399 @@ class _RegisterScreenState extends State<RegisterScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Register'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(
-              icon: Icon(Icons.email),
-              text: 'Email',
+        elevation: 0,
+        backgroundColor: Colors.white,
+        title: const CustomText(
+          text: 'Register',
+          variant: TextVariant.headlineMedium,
+          color: DesignTokens.textPrimary,
+          fontWeight: FontWeight.w600,
+        ),
+        iconTheme: const IconThemeData(color: DesignTokens.textPrimary),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                bottom: BorderSide(
+                  color: Colors.grey.withOpacity(0.1),
+                  width: 1,
+                ),
+              ),
             ),
-            Tab(
-              icon: Icon(Icons.phone),
-              text: 'Phone',
+            child: TabBar(
+              controller: _tabController,
+              labelColor: DesignTokens.primary,
+              unselectedLabelColor: DesignTokens.textSecondary,
+              indicatorColor: DesignTokens.primary,
+              indicatorWeight: 3,
+              tabs: const [
+                Tab(
+                  icon: Icon(Icons.email_outlined),
+                  text: 'Email',
+                ),
+                Tab(
+                  icon: Icon(Icons.phone_outlined),
+                  text: 'Phone',
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
           // Email Register Tab
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _emailFormKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 40),
-                  const Icon(
-                    Icons.person_add,
-                    size: 80,
-                    color: Colors.blue,
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Create Account',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Sign up with Email',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey[600],
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 48),
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Full Name',
-                      prefixIcon: Icon(Icons.person),
-                    ),
-                    validator: Validators.validateName,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: Icon(Icons.email),
-                    ),
-                    validator: Validators.validateEmail,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
-                      ),
-                    ),
-                    validator: Validators.validatePassword,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _confirmPasswordController,
-                    obscureText: _obscureConfirmPassword,
-                    decoration: InputDecoration(
-                      labelText: 'Confirm Password',
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscureConfirmPassword
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _obscureConfirmPassword = !_obscureConfirmPassword;
-                          });
-                        },
-                      ),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please confirm your password';
-                      }
-                      if (value != _passwordController.text) {
-                        return 'Passwords do not match';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: _isLoading ? null : _handleEmailRegister,
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Register'),
-                  ),
-                  const SizedBox(height: 16),
-                  // Divider with "OR"
-                  const Row(
+          Container(
+            color: Colors.white,
+            child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              child: Form(
+                key: _emailFormKey,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Expanded(child: Divider()),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: Text('OR'),
+                      const SizedBox(height: 40),
+                      // Header Section
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: DesignTokens.primary.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.person_add_outlined,
+                          size: 48,
+                          color: DesignTokens.primary,
+                        ),
                       ),
-                      Expanded(child: Divider()),
+                      const SizedBox(height: 32),
+                      const CustomText(
+                        text: 'Create Account',
+                        variant: TextVariant.displayLarge,
+                        color: DesignTokens.textPrimary,
+                        fontWeight: FontWeight.bold,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      CustomText(
+                        text: 'Sign up to get started',
+                        variant: TextVariant.bodyLarge,
+                        color: DesignTokens.textSecondary,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 48),
+                      // Form Fields
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextFormField(
+                            controller: _nameController,
+                            style: const TextStyle(color: DesignTokens.textPrimary, fontSize: 16),
+                            decoration: InputDecoration(
+                              labelText: 'Full Name',
+                              labelStyle: const TextStyle(color: DesignTokens.textSecondary),
+                              prefixIcon: const Icon(Icons.person_outline, color: DesignTokens.textSecondary),
+                              filled: true,
+                              fillColor: Colors.grey.withOpacity(0.05),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: DesignTokens.primary, width: 2),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                            ),
+                            validator: Validators.validateName,
+                          ),
+                          const SizedBox(height: 20),
+                          TextFormField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            style: const TextStyle(color: DesignTokens.textPrimary, fontSize: 16),
+                            decoration: InputDecoration(
+                              labelText: 'Email',
+                              labelStyle: const TextStyle(color: DesignTokens.textSecondary),
+                              prefixIcon: const Icon(Icons.email_outlined, color: DesignTokens.textSecondary),
+                              filled: true,
+                              fillColor: Colors.grey.withOpacity(0.05),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: DesignTokens.primary, width: 2),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                            ),
+                            validator: Validators.validateEmail,
+                          ),
+                          const SizedBox(height: 20),
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            style: const TextStyle(color: DesignTokens.textPrimary, fontSize: 16),
+                            decoration: InputDecoration(
+                              labelText: 'Password',
+                              labelStyle: const TextStyle(color: DesignTokens.textSecondary),
+                              prefixIcon: const Icon(Icons.lock_outline, color: DesignTokens.textSecondary),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                  color: DesignTokens.textSecondary,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
+                              ),
+                              filled: true,
+                              fillColor: Colors.grey.withOpacity(0.05),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: DesignTokens.primary, width: 2),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                            ),
+                            validator: Validators.validatePassword,
+                          ),
+                          const SizedBox(height: 20),
+                          TextFormField(
+                            controller: _confirmPasswordController,
+                            obscureText: _obscureConfirmPassword,
+                            style: const TextStyle(color: DesignTokens.textPrimary, fontSize: 16),
+                            decoration: InputDecoration(
+                              labelText: 'Confirm Password',
+                              labelStyle: const TextStyle(color: DesignTokens.textSecondary),
+                              prefixIcon: const Icon(Icons.lock_outline, color: DesignTokens.textSecondary),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscureConfirmPassword
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                  color: DesignTokens.textSecondary,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscureConfirmPassword = !_obscureConfirmPassword;
+                                  });
+                                },
+                              ),
+                              filled: true,
+                              fillColor: Colors.grey.withOpacity(0.05),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: DesignTokens.primary, width: 2),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please confirm your password';
+                              }
+                              if (value != _passwordController.text) {
+                                return 'Passwords do not match';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 32),
+                          // Register Button
+                          CustomButton(
+                            label: 'Register',
+                            icon: Icons.person_add,
+                            onPressed: _isLoading ? null : _handleEmailRegister,
+                            variant: ButtonVariant.primary,
+                            size: ButtonSize.large,
+                            isLoading: _isLoading,
+                            isFullWidth: true,
+                          ),
+                          const SizedBox(height: 32),
+                          // Divider with "OR"
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Divider(
+                                  color: Colors.grey.withOpacity(0.2),
+                                  thickness: 1,
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Text(
+                                  'OR',
+                                  style: TextStyle(
+                                    color: DesignTokens.textLight,
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Divider(
+                                  color: Colors.grey.withOpacity(0.2),
+                                  thickness: 1,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          // Google Sign In Button
+                          CustomButton(
+                            label: 'Continue with Google',
+                            icon: Icons.g_mobiledata,
+                            onPressed: _isLoading ? null : _handleGoogleSignIn,
+                            variant: ButtonVariant.outline,
+                            size: ButtonSize.large,
+                            isFullWidth: true,
+                          ),
+                          const SizedBox(height: 32),
+                          // Sign in link
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              CustomText(
+                                text: 'Already have an account? ',
+                                variant: TextVariant.bodyMedium,
+                                color: DesignTokens.textSecondary,
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                },
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: const CustomText(
+                                  text: 'Sign in',
+                                  variant: TextVariant.bodyMedium,
+                                  color: DesignTokens.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 40),
+                        ],
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  // Google Sign In Button
-                  OutlinedButton.icon(
-                    onPressed: _isLoading ? null : _handleGoogleSignIn,
-                    icon: Image.asset(
-                      'assets/images/google_logo.png',
-                      height: 20,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Icon(Icons.g_mobiledata, size: 20);
-                      },
-                    ),
-                    label: const Text('Continue with Google'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                    child: const Text('Already have an account? Sign in'),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
 
           // Phone Register Tab
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _phoneFormKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 40),
-                  const Icon(
-                    Icons.phone_android,
-                    size: 80,
-                    color: Colors.blue,
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Create Account',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _isOtpSent
-                        ? 'Enter the verification code sent to your phone'
-                        : 'Sign up with Phone Number',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey[600],
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.blue[700], size: 16),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Account will be created automatically when you verify your phone number',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.blue[900],
-                              fontWeight: FontWeight.w500,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
+          Container(
+            color: Colors.white,
+            child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              child: Form(
+                key: _phoneFormKey,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 40),
+                      // Header Section
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: DesignTokens.primary.withOpacity(0.1),
+                          shape: BoxShape.circle,
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 48),
+                        child: const Icon(
+                          Icons.phone_outlined,
+                          size: 48,
+                          color: DesignTokens.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      const CustomText(
+                        text: 'Create Account',
+                        variant: TextVariant.displayLarge,
+                        color: DesignTokens.textPrimary,
+                        fontWeight: FontWeight.bold,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      CustomText(
+                        text: _isOtpSent
+                            ? 'Enter the verification code sent to your phone'
+                            : 'Sign up with Phone Number',
+                        variant: TextVariant.bodyLarge,
+                        color: DesignTokens.textSecondary,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: DesignTokens.success.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: DesignTokens.success.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.info_outline, color: DesignTokens.success, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Account will be created automatically when you verify your phone number',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: DesignTokens.success,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 48),
                   if (!_isOtpSent) ...[
                     // Test Phone Numbers Section
                     Container(
@@ -777,6 +942,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                         border: Border.all(color: Colors.blue.withOpacity(0.3)),
                       ),
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
@@ -866,188 +1032,307 @@ class _RegisterScreenState extends State<RegisterScreen>
                       ],
                     ),
                     const SizedBox(height: 24),
-                    TextFormField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: 'Phone Number',
-                        hintText: '+16505553434',
-                        prefixIcon: Icon(Icons.phone),
-                        helperText: 'Enter your phone number or use test number above',
-                      ),
-                      validator: Validators.validatePhone,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[\d+]')),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: _isLoading ? null : _sendOTP,
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Send Verification Code'),
-                    ),
-                  ] else ...[
-                    TextFormField(
-                      controller: _otpController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: 'Verification Code',
-                        hintText: 'Enter 6-digit code',
-                        prefixIcon: const Icon(Icons.lock),
-                        helperText: TestPhoneNumbers.isTestNumber(_phoneController.text)
-                            ? 'Test numbers: Use code 123456'
-                            : 'Enter the code sent to your phone',
-                        helperMaxLines: 2,
-                      ),
-                      validator: Validators.validateOTP,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(6),
-                      ],
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        letterSpacing: 8,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    if (TestPhoneNumbers.isTestNumber(_phoneController.text))
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                      TextFormField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        style: const TextStyle(color: DesignTokens.textPrimary, fontSize: 16),
+                        decoration: InputDecoration(
+                          labelText: 'Phone Number',
+                          hintText: '+16505553434',
+                          labelStyle: const TextStyle(color: DesignTokens.textSecondary),
+                          prefixIcon: const Icon(Icons.phone_outlined, color: DesignTokens.textSecondary),
+                          helperText: 'Enter your phone number or use test number above',
+                          helperStyle: TextStyle(color: DesignTokens.textLight, fontSize: 12),
+                          filled: true,
+                          fillColor: Colors.grey.withOpacity(0.05),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: DesignTokens.primary, width: 2),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                         ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info_outline, color: Colors.blue[700], size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Using Supabase test number.\nVerification code: 123456\n\nIf SMS auto-retrieval timed out, enter code manually.',
+                        validator: Validators.validatePhone,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[\d+]')),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      CustomButton(
+                        label: 'Send Verification Code',
+                        icon: Icons.send,
+                        onPressed: _isLoading ? null : _sendOTP,
+                        variant: ButtonVariant.primary,
+                        size: ButtonSize.large,
+                        isLoading: _isLoading,
+                        isFullWidth: true,
+                      ),
+                    ] else ...[
+                      TextFormField(
+                        controller: _otpController,
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 24,
+                          letterSpacing: 8,
+                          color: DesignTokens.textPrimary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: 'Verification Code',
+                          hintText: '000000',
+                          labelStyle: const TextStyle(color: DesignTokens.textSecondary),
+                          prefixIcon: const Icon(Icons.lock_outline, color: DesignTokens.textSecondary),
+                          helperText: TestPhoneNumbers.isTestNumber(_phoneController.text)
+                              ? 'Test numbers: Use code 123456'
+                              : 'Enter the code sent to your phone',
+                          helperStyle: TextStyle(color: DesignTokens.textLight, fontSize: 12),
+                          helperMaxLines: 2,
+                          filled: true,
+                          fillColor: Colors.grey.withOpacity(0.05),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: DesignTokens.primary, width: 2),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                        ),
+                        validator: Validators.validateOTP,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(6),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (TestPhoneNumbers.isTestNumber(_phoneController.text))
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: DesignTokens.info.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: DesignTokens.info.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.info_outline, color: DesignTokens.info, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Using Supabase test number.\nVerification code: 123456\n\nIf SMS auto-retrieval timed out, enter code manually.',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: DesignTokens.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: DesignTokens.warning.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: DesignTokens.warning.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.info_outline, color: DesignTokens.warning, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'If SMS auto-retrieval timed out, check:\n1. Your SMS messages for the verification code\n2. Supabase Dashboard > Authentication > Users for the code\n3. Enter the code manually in the field above',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: DesignTokens.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 24),
+                      CustomButton(
+                        label: 'Verify & Register',
+                        icon: Icons.verified,
+                        onPressed: _isLoading ? null : _verifyOTP,
+                        variant: ButtonVariant.primary,
+                        size: ButtonSize.large,
+                        isLoading: _isLoading,
+                        isFullWidth: true,
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            "Didn't receive code? ",
+                            style: TextStyle(
+                              color: DesignTokens.textSecondary,
+                              fontSize: 14,
+                            ),
+                          ),
+                          if (_resendTimer > 0)
+                            Text(
+                              'Resend in $_resendTimer s',
+                              style: TextStyle(
+                                color: DesignTokens.textSecondary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            )
+                          else
+                            TextButton(
+                              onPressed: _resendOTP,
+                              style: TextButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: const Text(
+                                'Resend Code',
                                 style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.blue[900],
+                                  color: DesignTokens.primary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
                                 ),
                               ),
                             ),
-                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _isOtpSent = false;
+                            _otpController.clear();
+                            _resendTimer = 0;
+                          });
+                        },
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                      )
-                    else
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info_outline, color: Colors.orange[700], size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'If SMS auto-retrieval timed out, check:\n1. Your SMS messages for the verification code\n2. Supabase Dashboard > Authentication > Users for the code\n3. Enter the code manually in the field above',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.orange[900],
-                                ),
-                              ),
-                            ),
-                          ],
+                        child: const Text(
+                          'Change Phone Number',
+                          style: TextStyle(
+                            color: DesignTokens.primary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
                         ),
                       ),
-                    const SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: _isLoading ? null : _verifyOTP,
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Verify & Register'),
+                    ],
+                    const SizedBox(height: 32),
+                    // Divider with "OR"
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Divider(
+                            color: Colors.grey.withOpacity(0.2),
+                            thickness: 1,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(
+                            'OR',
+                            style: TextStyle(
+                              color: DesignTokens.textLight,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Divider(
+                            color: Colors.grey.withOpacity(0.2),
+                            thickness: 1,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
+                    // Google Sign In Button
+                    OutlinedButton.icon(
+                      onPressed: _isLoading ? null : _handleGoogleSignIn,
+                      icon: Image.asset(
+                        'assets/images/google_logo.png',
+                        height: 20,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(Icons.g_mobiledata, size: 20, color: DesignTokens.textPrimary);
+                        },
+                      ),
+                      label: const Text(
+                        'Continue with Google',
+                        style: TextStyle(
+                          color: DesignTokens.textPrimary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: BorderSide(color: Colors.grey.withOpacity(0.3), width: 1.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    // Sign in link
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          "Didn't receive code? ",
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
-                        if (_resendTimer > 0)
-                          Text(
-                            'Resend in $_resendTimer s',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontWeight: FontWeight.bold,
-                            ),
-                          )
-                        else
-                          TextButton(
-                            onPressed: _resendOTP,
-                            child: const Text('Resend Code'),
+                          'Already have an account? ',
+                          style: TextStyle(
+                            color: DesignTokens.textSecondary,
+                            fontSize: 14,
                           ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                          },
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text(
+                            'Sign in',
+                            style: TextStyle(
+                              color: DesignTokens.primary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 24),
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _isOtpSent = false;
-                          _otpController.clear();
-                          _resendTimer = 0;
-                        });
-                      },
-                      child: const Text('Change Phone Number'),
-                    ),
+                    const SizedBox(height: 40),
                   ],
-                  const SizedBox(height: 16),
-                  // Divider with "OR"
-                  const Row(
-                    children: [
-                      Expanded(child: Divider()),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: Text('OR'),
-                      ),
-                      Expanded(child: Divider()),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  // Google Sign In Button
-                  OutlinedButton.icon(
-                    onPressed: _isLoading ? null : _handleGoogleSignIn,
-                    icon: Image.asset(
-                      'assets/images/google_logo.png',
-                      height: 20,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Icon(Icons.g_mobiledata, size: 20);
-                      },
-                    ),
-                    label: const Text('Continue with Google'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                    child: const Text('Already have an account? Sign in'),
-                  ),
-                ],
+                ),
               ),
             ),
+          ),
           ),
         ],
       ),

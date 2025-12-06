@@ -1,7 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
-import '../models/user_role.dart';
-import 'sql_database_service.dart';
+import 'common/sql_database_service.dart';
 import '../config/supabase_config.dart';
 
 /// Data Service using Supabase PostgreSQL only
@@ -95,7 +94,7 @@ class DataService {
 
     try {
       final response = await _sqlService!.client
-          .from('users')
+          .from('user')
           .select()
           .order('created_at', ascending: false);
       return (response as List)
@@ -117,6 +116,20 @@ class DataService {
     } catch (e) {
       print('Failed to get all users: $e');
       return [];
+    }
+  }
+
+  /// Get multiple users by IDs in a single batch query (much faster than individual queries)
+  Future<Map<String, UserModel>> getUsersByIds(List<String> userIds) async {
+    if (_sqlService == null) {
+      throw Exception('Supabase not initialized. DataService requires Supabase.');
+    }
+
+    try {
+      return await _sqlService!.getUsersByIds(userIds);
+    } catch (e) {
+      print('Failed to get users by IDs: $e');
+      return {};
     }
   }
 }

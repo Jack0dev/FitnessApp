@@ -8,6 +8,8 @@ class UserPreferenceService {
   static const String _lastLoginProviderKey = 'last_login_provider'; // 'email' or 'google'
   static const String _refreshTokenKey = 'refresh_token'; // Refresh token for session refresh
   static const String _accessTokenKey = 'access_token'; // Access token (optional, for reference)
+  static const String _languageKey = 'app_language'; // 'vi' or 'en'
+  static const String _loggedInEmailsKey = 'logged_in_emails'; // List of emails that have been logged in
   
   final _secureStorage = const FlutterSecureStorage(
     aOptions: AndroidOptions(
@@ -33,17 +35,23 @@ class UserPreferenceService {
       // Save provider type
       final providerSaved = await prefs.setString(_lastLoginProviderKey, provider);
       
+      // Add email to logged in emails list
+      await _addLoggedInEmail(email);
+      
       print('💾 [UserPreferenceService] Email saved: $emailSaved, Provider saved: $providerSaved');
       
       // Save password securely only if provider is email (Google doesn't have password)
       if (password != null && provider == 'email') {
+        // Save password with email as key for multiple email support
+        await _secureStorage.write(key: '${_lastLoggedInPasswordKey}_$email', value: password);
+        // Also save to the main key for backward compatibility
         await _secureStorage.write(key: _lastLoggedInPasswordKey, value: password);
         print('💾 [UserPreferenceService] Password saved to secure storage');
       } else {
         // Don't clear password if it's Google provider (password is not needed)
         // Only clear if switching from email to Google
         if (provider == 'google') {
-          await _secureStorage.delete(key: _lastLoggedInPasswordKey);
+        await _secureStorage.delete(key: _lastLoggedInPasswordKey);
           print('💾 [UserPreferenceService] Password cleared (Google provider)');
         } else {
           print('💾 [UserPreferenceService] No password to save (provider: $provider)');
@@ -243,6 +251,91 @@ class UserPreferenceService {
       return {
         'error': e.toString(),
       };
+    }
+  }
+
+  /// Save language preference ('vi' or 'en')
+  Future<bool> saveLanguage(String languageCode) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setString(_languageKey, languageCode);
+    } catch (e) {
+      print('❌ [UserPreferenceService] Error saving language: $e');
+      return false;
+    }
+  }
+
+  /// Get saved language preference
+  Future<String?> getLanguage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_languageKey);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Add email to logged in emails list
+  Future<void> _addLoggedInEmail(String email) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final emails = await getLoggedInEmails();
+      if (!emails.contains(email)) {
+        emails.add(email);
+        await prefs.setStringList(_loggedInEmailsKey, emails);
+      }
+    } catch (e) {
+      print('❌ [UserPreferenceService] Error adding logged in email: $e');
+    }
+  }
+
+  /// Get list of emails that have been logged in
+  Future<List<String>> getLoggedInEmails() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getStringList(_loggedInEmailsKey) ?? [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Get password for a specific email
+  Future<String?> getPasswordForEmail(String email) async {
+    try {
+      // First try to get password with email-specific key
+      final password = await _secureStorage.read(key: '${_lastLoggedInPasswordKey}_$email');
+      if (password != null) {
+        return password;
+      }
+      // Fallback to main key if email matches last logged in email
+      final lastEmail = await getLastLoggedInEmail();
+      if (lastEmail == email) {
+        return await _secureStorage.read(key: _lastLoggedInPasswordKey);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Check if password is saved for a specific email
+  Future<bool> hasPasswordForEmail(String email) async {
+    final password = await getPasswordForEmail(email);
+    return password != null;
+  }
+
+  /// Remove email from logged in emails list
+  Future<bool> removeLoggedInEmail(String email) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final emails = await getLoggedInEmails();
+      emails.remove(email);
+      await prefs.setStringList(_loggedInEmailsKey, emails);
+      // Also remove password for this email
+      await _secureStorage.delete(key: '${_lastLoggedInPasswordKey}_$email');
+      return true;
+    } catch (e) {
+      return false;
     }
   }
 }

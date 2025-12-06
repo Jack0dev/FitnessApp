@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
-import '../../services/auth_service.dart';
-import '../../services/data_service.dart';
-import '../../services/user_preference_service.dart';
-import '../../services/course_service.dart';
+import '../../services/auth/auth_service.dart';
+import '../../services/user/data_service.dart';
+import '../../services/course/course_service.dart';
 import '../../models/user_model.dart';
-import '../../models/user_role.dart';
 import '../../models/course_model.dart';
 import '../../models/enrollment_model.dart';
 import '../../core/routes/app_routes.dart';
-import '../../widgets/loading_widget.dart';
+import '../../core/constants/design_tokens.dart';
+import '../../widgets/widgets.dart';
+import '../../core/localization/app_localizations.dart';
 import 'pt_courses_management_screen.dart';
+import 'pt_students_screen.dart';
+import 'pt_qr_attendance_screen.dart';
 
 class PTDashboardScreen extends StatefulWidget {
   const PTDashboardScreen({super.key});
@@ -21,7 +23,6 @@ class PTDashboardScreen extends StatefulWidget {
 class _PTDashboardScreenState extends State<PTDashboardScreen> {
   final _authService = AuthService();
   final _dataService = DataService();
-  final _userPreferenceService = UserPreferenceService();
   UserModel? _userModel;
   bool _isLoading = true;
   int _totalClients = 0;
@@ -101,11 +102,18 @@ class _PTDashboardScreenState extends State<PTDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: DesignTokens.background,
       appBar: AppBar(
-        title: const Text('PT Dashboard'),
+        elevation: 0,
+        backgroundColor: DesignTokens.surface,
+        title: CustomText(
+          text: context.translate('pt_dashboard'),
+          variant: TextVariant.headlineMedium,
+          color: DesignTokens.textPrimary,
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.person),
+            icon: Icon(Icons.person, color: DesignTokens.textPrimary),
             onPressed: () {
               Navigator.of(context).pushNamed(AppRoutes.profile);
             },
@@ -123,49 +131,70 @@ class _PTDashboardScreenState extends State<PTDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Welcome Card
-                    Card(
-                      elevation: 4,
+                    // Welcome Card with Gradient
+                    Container(
+                      margin: const EdgeInsets.only(bottom: DesignTokens.spacingMD),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [DesignTokens.primary, DesignTokens.secondary],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(DesignTokens.radiusLG),
+                        boxShadow: DesignTokens.shadowLG,
+                      ),
                       child: Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(DesignTokens.spacingLG),
                         child: Row(
                           children: [
-                            CircleAvatar(
-                              radius: 30,
-                              backgroundImage: _userModel?.photoURL != null
-                                  ? NetworkImage(_userModel!.photoURL!)
-                                  : null,
-                              child: _userModel?.photoURL == null
-                                  ? const Icon(Icons.fitness_center, size: 30)
-                                  : null,
+                            Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+                              ),
+                              child: CircleAvatar(
+                                radius: 32,
+                                backgroundColor: Colors.white.withOpacity(0.2),
+                                backgroundImage: _userModel?.photoURL != null
+                                    ? NetworkImage(_userModel!.photoURL!)
+                                    : null,
+                                child: _userModel?.photoURL == null
+                                    ? const Icon(Icons.fitness_center, size: 32, color: Colors.white)
+                                    : null,
+                              ),
                             ),
-                            const SizedBox(width: 16),
+                            const SizedBox(width: 20),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    'Welcome, ${_userModel?.displayName ?? "Trainer"}!',
-                                    style: const TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                  CustomText(
+                                    text: '${context.translate('welcome')}, ${_userModel?.displayName ?? context.translate('profile')}!',
+                                    variant: TextVariant.headlineMedium,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
                                   ),
-                                  const SizedBox(height: 4),
+                                  const SizedBox(height: 6),
                                   Row(
                                     children: [
-                                      Icon(
-                                        UserRole.pt.icon,
-                                        size: 16,
-                                        color: UserRole.pt.color,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        UserRole.pt.displayName,
-                                        style: TextStyle(
-                                          color: UserRole.pt.color,
-                                          fontWeight: FontWeight.w500,
+                                      Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(6),
                                         ),
+                                        child: Icon(
+                                          UserRole.pt.icon,
+                                          size: 16,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      CustomText(
+                                        text: UserRole.pt.displayName,
+                                        variant: TextVariant.bodyMedium,
+                                        color: Colors.white.withOpacity(0.9),
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ],
                                   ),
@@ -179,53 +208,51 @@ class _PTDashboardScreenState extends State<PTDashboardScreen> {
                     const SizedBox(height: 24),
                     
                     // Statistics
-                    const Text(
-                      'Statistics',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    CustomText(
+                      text: context.translate('statistics'),
+                      variant: TextVariant.headlineMedium,
+                      color: DesignTokens.textPrimary,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: DesignTokens.spacingMD),
                     Row(
                       children: [
                         Expanded(
                           child: _StatCard(
-                            title: 'Total Clients',
+                            title: context.translate('total_clients'),
                             value: _totalClients.toString(),
                             icon: Icons.people,
-                            color: Colors.blue,
+                            color: DesignTokens.info,
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: DesignTokens.spacingSM),
                         Expanded(
                           child: _StatCard(
-                            title: 'Active Sessions',
+                            title: context.translate('active_sessions'),
                             value: _activeSessions.toString(),
                             icon: Icons.event,
-                            color: Colors.green,
+                            color: DesignTokens.success,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: DesignTokens.spacingSM),
                     Row(
                       children: [
                         Expanded(
                           child: _StatCard(
-                            title: 'Courses',
+                            title: context.translate('courses'),
                             value: '$_totalCourses',
                             icon: Icons.school,
-                            color: Colors.orange,
+                            color: DesignTokens.warning,
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: DesignTokens.spacingSM),
                         Expanded(
                           child: _StatCard(
-                            title: 'Active Courses',
+                            title: context.translate('active'),
                             value: '$_activeSessions',
                             icon: Icons.check_circle,
-                            color: Colors.amber,
+                            color: DesignTokens.accent,
                           ),
                         ),
                       ],
@@ -233,12 +260,29 @@ class _PTDashboardScreenState extends State<PTDashboardScreen> {
                     const SizedBox(height: 24),
                     
                     // Quick Actions
-                    const Text(
-                      'Quick Actions',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [DesignTokens.primary, DesignTokens.secondary],
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.flash_on_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: DesignTokens.spacingSM),
+                        CustomText(
+                          text: context.translate('quick_actions'),
+                          variant: TextVariant.headlineMedium,
+                          color: DesignTokens.textPrimary,
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     GridView.count(
@@ -247,12 +291,13 @@ class _PTDashboardScreenState extends State<PTDashboardScreen> {
                       crossAxisCount: 2,
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 12,
-                      childAspectRatio: 1.5,
+                      childAspectRatio: 1.3,
                       children: [
                         _ActionCard(
-                          title: 'My Courses',
-                          icon: Icons.school,
-                          color: Colors.blue,
+                          title: context.translate('my_courses'),
+                          icon: Icons.school_rounded,
+                          color: DesignTokens.info,
+                          gradient: [DesignTokens.info, DesignTokens.accent],
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(
@@ -262,64 +307,48 @@ class _PTDashboardScreenState extends State<PTDashboardScreen> {
                           },
                         ),
                         _ActionCard(
-                          title: 'My Clients',
-                          icon: Icons.people_outline,
-                          color: Colors.green,
+                          title: context.translate('my_students'),
+                          icon: Icons.people_rounded,
+                          color: DesignTokens.success,
+                          gradient: [DesignTokens.primary, DesignTokens.secondary],
                           onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('My Clients - Coming soon')),
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => const PTStudentsScreen(),
+                              ),
                             );
                           },
                         ),
                         _ActionCard(
-                          title: 'Settings',
-                          icon: Icons.settings,
-                          color: Colors.grey,
+                          title: context.translate('attendance'),
+                          icon: Icons.qr_code_scanner_rounded,
+                          color: DesignTokens.warning,
+                          gradient: [DesignTokens.warning, DesignTokens.accent],
                           onTap: () {
-                            Navigator.of(context).pushNamed(AppRoutes.settings);
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => const PTAttendanceScreen(),
+                              ),
+                            );
                           },
                         ),
                         _ActionCard(
-                          title: 'Profile',
-                          icon: Icons.person,
-                          color: Colors.purple,
+                          title: context.translate('chat'),
+                          icon: Icons.chat_rounded,
+                          color: DesignTokens.secondary,
+                          gradient: [DesignTokens.secondary, DesignTokens.accent],
                           onTap: () {
-                            Navigator.of(context).pushNamed(AppRoutes.profile);
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => const PTStudentsScreen(),
+                              ),
+                            );
                           },
                         ),
                       ],
                     ),
                     const SizedBox(height: 24),
                     
-                    // Sign Out Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          try {
-                            await _userPreferenceService.clearAllSavedData();
-                            await _authService.signOut();
-                            if (context.mounted) {
-                              Navigator.of(context)
-                                  .pushReplacementNamed(AppRoutes.login);
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(e.toString())),
-                              );
-                            }
-                          }
-                        },
-                        icon: const Icon(Icons.logout),
-                        label: const Text('Sign Out'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -343,78 +372,169 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Icon(icon, color: color, size: 32),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                ),
-              ],
+    return CustomCard(
+      variant: CardVariant.white,
+      padding: const EdgeInsets.all(DesignTokens.spacingLG),
+      margin: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(DesignTokens.radiusMD),
             ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
-            ),
-          ],
-        ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(height: DesignTokens.spacingMD),
+          CustomText(
+            text: value,
+            variant: TextVariant.displaySmall,
+            color: color,
+            fontWeight: FontWeight.bold,
+          ),
+          const SizedBox(height: 4),
+          CustomText(
+            text: title,
+            variant: TextVariant.bodySmall,
+            color: DesignTokens.textSecondary,
+            fontWeight: FontWeight.w500,
+          ),
+        ],
       ),
     );
   }
 }
 
-class _ActionCard extends StatelessWidget {
+class _ActionCard extends StatefulWidget {
   final String title;
   final IconData icon;
   final Color color;
+  final List<Color>? gradient;
   final VoidCallback onTap;
 
   const _ActionCard({
     required this.title,
     required this.icon,
     required this.color,
+    this.gradient,
     required this.onTap,
   });
 
   @override
+  State<_ActionCard> createState() => _ActionCardState();
+}
+
+class _ActionCardState extends State<_ActionCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 150),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  List<Color> _getGradient() {
+    if (widget.gradient != null) return widget.gradient!;
+    return [widget.color, widget.color.withOpacity(0.7)];
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: color, size: 32),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+    final gradient = _getGradient();
+    
+    return ScaleTransition(
+      scale: _scaleAnimation,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: gradient,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: gradient.first.withOpacity(0.3),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+              spreadRadius: 0,
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onTap,
+            onTapDown: (_) {
+              _controller.forward();
+            },
+            onTapUp: (_) {
+              _controller.reverse();
+            },
+            onTapCancel: () {
+              _controller.reverse();
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.25),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.3),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      widget.icon,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Flexible(
+                    child: CustomText(
+                      text: widget.title,
+                      variant: TextVariant.bodyMedium,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
